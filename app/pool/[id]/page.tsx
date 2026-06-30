@@ -10,8 +10,10 @@ import { EscrowStatus } from "@/components/ui/escrow-status";
 import { LeaderboardRow, LeaderboardHeader } from "@/components/ui/leaderboard-row";
 import { Button } from "@/components/ui/button";
 import { GoalOverlay } from "@/components/ui/goal-overlay";
+import { TopNav } from "@/components/ui/top-nav";
+import { ShareButton } from "@/components/ui/share-button";
 import type { Participant } from "@/lib/types";
-import { ArrowLeft, Share2, Trophy, Goal } from "lucide-react";
+import { Trophy, Goal } from "lucide-react";
 
 const MOCK_PARTICIPANTS: Participant[] = [
   { id: "1", name: "Alex", walletAddress: "0x1234...5678", team: { name: "Brazil", flag: "🇧🇷", group: "A" }, score: 12, rank: 1 },
@@ -57,22 +59,12 @@ export default function PoolPage() {
 
   return (
     <div className="relative flex min-h-dvh flex-col">
-      {/* Top bar */}
-      <div className="relative z-10 border-b border-chalk/8 px-4 py-3">
-        <div className="mx-auto flex max-w-4xl items-center justify-between">
-          <button className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-wider text-chalk-muted transition-colors hover:text-chalk">
-            <ArrowLeft className="h-3.5 w-3.5" />
-            Pools
-          </button>
-          <span className="font-display text-sm uppercase tracking-widest text-chalk">
-            Sweepr
-          </span>
-          <button className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-wider text-chalk-muted transition-colors hover:text-chalk">
-            <Share2 className="h-3.5 w-3.5" />
-            Share
-          </button>
-        </div>
-      </div>
+      <TopNav
+        title="Office Cup 26"
+        showBack
+        backHref="/pools"
+        right={<ShareButton poolId={params.id as string} />}
+      />
 
       <main className="relative z-10 mx-auto flex w-full max-w-4xl flex-1 flex-col gap-4 px-4 py-6 sm:gap-6 sm:py-8">
         {/* Pool header */}

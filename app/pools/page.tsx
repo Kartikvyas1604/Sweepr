@@ -4,7 +4,9 @@ import { motion } from "framer-motion";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Plus, Users, Trophy, ArrowRight, Wallet } from "lucide-react";
+import { TopNav } from "@/components/ui/top-nav";
+import { WalletButton } from "@/components/ui/wallet-button";
+import { Plus, Users, Trophy, ArrowRight } from "lucide-react";
 
 const MOCK_POOLS = [
   {
@@ -45,20 +47,7 @@ const STATUS_COLORS = {
 export default function PoolsPage() {
   return (
     <div className="relative flex min-h-dvh flex-col">
-      {/* Top bar */}
-      <div className="relative z-10 border-b border-chalk/8 px-4 py-3">
-        <div className="mx-auto flex max-w-4xl items-center justify-between">
-          <span className="font-display text-sm uppercase tracking-widest text-chalk">
-            Sweepr
-          </span>
-          <div className="flex items-center gap-3">
-            <button className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-wider text-chalk-muted transition-colors hover:text-chalk">
-              <Wallet className="h-3.5 w-3.5" />
-              0x12...34
-            </button>
-          </div>
-        </div>
-      </div>
+      <TopNav title="My Pools" right={<WalletButton />} />
 
       <main className="relative z-10 mx-auto flex w-full max-w-4xl flex-1 flex-col gap-6 px-4 py-8">
         {/* Header */}

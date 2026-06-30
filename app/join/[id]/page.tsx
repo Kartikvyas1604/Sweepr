@@ -11,7 +11,8 @@ import { TeamAssignment } from "@/components/ui/team-assignment";
 import { LiveIndicator } from "@/components/ui/live-indicator";
 import { useCountdown } from "@/hooks/use-countdown";
 import type { Team } from "@/lib/types";
-import { Users, DollarSign, ArrowLeft, Check } from "lucide-react";
+import { TopNav } from "@/components/ui/top-nav";
+import { Users, DollarSign, Check } from "lucide-react";
 
 const MOCK_POOL = {
   name: "Office Cup 26",
@@ -33,18 +34,7 @@ export default function JoinPage() {
 
   return (
     <div className="relative flex min-h-dvh flex-col">
-      {/* Back link */}
-      <div className="relative z-10 border-b border-chalk/8 px-4 py-3">
-        <div className="mx-auto flex max-w-2xl items-center justify-between">
-          <button className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-wider text-chalk-muted transition-colors hover:text-chalk">
-            <ArrowLeft className="h-3.5 w-3.5" />
-            Back
-          </button>
-          <span className="font-display text-sm uppercase tracking-widest text-chalk">
-            Sweepr
-          </span>
-        </div>
-      </div>
+      <TopNav title="Join Pool" showBack />
 
       <main className="relative z-10 flex flex-1 items-center justify-center px-4 py-12">
         <div className="w-full max-w-md">

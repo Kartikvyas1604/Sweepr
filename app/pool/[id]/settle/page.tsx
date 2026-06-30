@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatAddress } from "@/lib/utils";
+import { TopNav } from "@/components/ui/top-nav";
 import {
   Trophy,
   Coins,
@@ -15,7 +16,6 @@ import {
   PartyPopper,
   Lock,
   Unlock,
-  ArrowLeft,
 } from "lucide-react";
 
 const WINNER = {
@@ -102,18 +102,7 @@ export default function SettlePage() {
         )}
       </AnimatePresence>
 
-      {/* Top bar */}
-      <div className="relative z-10 border-b border-chalk/8 px-4 py-3">
-        <div className="mx-auto flex max-w-2xl items-center justify-between">
-          <button className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-wider text-chalk-muted transition-colors hover:text-chalk">
-            <ArrowLeft className="h-3.5 w-3.5" />
-            Pool
-          </button>
-          <span className="font-display text-sm uppercase tracking-widest text-chalk">
-            Settlement
-          </span>
-        </div>
-      </div>
+      <TopNav title="Settlement" showBack backHref={`/pool/${params.id}`} />
 
       <main className="relative z-10 flex flex-1 items-center justify-center px-4 py-12">
         <div className="w-full max-w-lg">
