@@ -1,9 +1,7 @@
 "use client";
 
-import { useRef, useState, useEffect, useMemo } from "react";
-import { Canvas, useFrame } from "@react-three/fiber";
-import { motion, AnimatePresence } from "framer-motion";
-import * as THREE from "three";
+import { useState, useEffect, useRef } from "react";
+import { motion, AnimatePresence, useAnimation } from "framer-motion";
 
 interface GoalOverlayProps {
   show: boolean;
@@ -11,336 +9,307 @@ interface GoalOverlayProps {
   teamFlag: string;
 }
 
-function generateFootballTexture(): THREE.CanvasTexture {
-  const size = 512;
-  const canvas = document.createElement("canvas");
-  canvas.width = size;
-  canvas.height = size;
-  const ctx = canvas.getContext("2d")!;
+const BALL_SVG = (
+  <svg viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg" className="h-full w-full">
+    <circle cx="50" cy="50" r="48" fill="#F5F5F5" stroke="#D0D0D0" strokeWidth="0.5" />
+    <path d="M50 4 L56 20 L72 14 L66 30 L82 34 L72 48 L88 56 L72 64 L78 80 L62 74 L56 90 L50 74 L44 90 L38 74 L22 80 L28 64 L12 56 L28 48 L18 34 L34 30 L28 14 L44 20 Z" fill="#1a1a1a" />
+    <path d="M50 4 L56 20 L50 28 Z" fill="#1a1a1a" />
+    <path d="M56 20 L72 14 L66 30 Z" fill="#1a1a1a" />
+    <path d="M72 14 L82 34 L72 48 Z" fill="#1a1a1a" />
+    <path d="M82 34 L88 56 L72 64 Z" fill="#1a1a1a" />
+    <path d="M88 56 L78 80 L62 74 Z" fill="#1a1a1a" />
+    <path d="M78 80 L62 74 L56 90 Z" fill="#1a1a1a" />
+    <path d="M56 90 L50 74 L44 90 Z" fill="#1a1a1a" />
+    <path d="M44 90 L38 74 L22 80 Z" fill="#1a1a1a" />
+    <path d="M22 80 L12 56 L28 48 Z" fill="#1a1a1a" />
+    <path d="M12 56 L18 34 L28 48 Z" fill="#1a1a1a" />
+    <path d="M18 34 L28 14 L34 30 Z" fill="#1a1a1a" />
+    <path d="M28 14 L44 20 L50 28 Z" fill="#1a1a1a" />
+    <path d="M44 20 L38 74 L34 30 Z" fill="#1a1a1a" />
+    <path d="M66 30 L72 48 L62 74 Z" fill="#1a1a1a" />
+  </svg>
+);
 
-  ctx.fillStyle = "#f0ead6";
-  ctx.fillRect(0, 0, size, size);
+const SHARDS = [
+  { clip: "polygon(0% 0%, 30% 0%, 40% 40%, 0% 30%)", drift: { x: [-30, -80], y: [-20, -60], r: [0, 45] } },
+  { clip: "polygon(30% 0%, 60% 0%, 50% 35%, 40% 40%)", drift: { x: [0, -40], y: [-20, -70], r: [0, -30] } },
+  { clip: "polygon(60% 0%, 100% 0%, 100% 30%, 50% 35%)", drift: { x: [30, 80], y: [-20, -50], r: [0, 60] } },
+  { clip: "polygon(0% 30%, 40% 40%, 30% 70%, 0% 60%)", drift: { x: [-20, -70], y: [0, 30], r: [0, -50] } },
+  { clip: "polygon(40% 40%, 50% 35%, 65% 45%, 30% 70%)", drift: { x: [0, -20], y: [0, 40], r: [0, 25] } },
+  { clip: "polygon(50% 35%, 100% 30%, 100% 60%, 65% 45%)", drift: { x: [20, 70], y: [0, 30], r: [0, -35] } },
+  { clip: "polygon(0% 60%, 30% 70%, 20% 100%, 0% 100%)", drift: { x: [-15, -60], y: [20, 70], r: [0, 40] } },
+  { clip: "polygon(30% 70%, 65% 45%, 70% 80%, 20% 100%)", drift: { x: [0, -30], y: [20, 60], r: [0, -55] } },
+  { clip: "polygon(65% 45%, 100% 60%, 100% 100%, 70% 80%)", drift: { x: [15, 60], y: [20, 65], r: [0, 30] } },
+  { clip: "polygon(20% 100%, 70% 80%, 100% 100%)", drift: { x: [0, -10], y: [30, 80], r: [0, -20] } },
+];
 
-  function drawPentagon(cx: number, cy: number, r: number, rot: number) {
-    ctx.beginPath();
-    for (let i = 0; i < 5; i++) {
-      const a = rot + (i * 2 * Math.PI) / 5 - Math.PI / 2;
-      const x = cx + r * Math.cos(a);
-      const y = cy + r * Math.sin(a);
-      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
-    }
-    ctx.closePath();
-    ctx.fillStyle = "#1a1a1a";
-    ctx.fill();
-    ctx.strokeStyle = "#1a1a1a";
-    ctx.lineWidth = 2;
-    ctx.stroke();
-
-    for (let i = 0; i < 5; i++) {
-      const a = rot + (i * 2 * Math.PI) / 5 - Math.PI / 2;
-      const mx = cx + (r * 2.2) * Math.cos(a);
-      const my = cy + (r * 2.2) * Math.sin(a);
-      ctx.beginPath();
-      ctx.moveTo(cx, cy);
-      ctx.lineTo(mx, my);
-      ctx.strokeStyle = "#1a1a1a";
-      ctx.lineWidth = 1.5;
-      ctx.stroke();
-    }
-  }
-
-  const positions = [
-    { x: size * 0.5, y: size * 0.5, r: size * 0.1, rot: 0 },
-    { x: size * 0.25, y: size * 0.25, r: size * 0.08, rot: 0.5 },
-    { x: size * 0.75, y: size * 0.25, r: size * 0.08, rot: 1.0 },
-    { x: size * 0.25, y: size * 0.75, r: size * 0.08, rot: 1.5 },
-    { x: size * 0.75, y: size * 0.75, r: size * 0.08, rot: 2.0 },
-    { x: size * 0.1, y: size * 0.5, r: size * 0.07, rot: 0.8 },
-    { x: size * 0.9, y: size * 0.5, r: size * 0.07, rot: 1.3 },
-    { x: size * 0.5, y: size * 0.15, r: size * 0.07, rot: 0.3 },
-    { x: size * 0.5, y: size * 0.85, r: size * 0.07, rot: 2.5 },
-    { x: size * 0.35, y: size * 0.35, r: size * 0.05, rot: 0.7 },
-    { x: size * 0.65, y: size * 0.35, r: size * 0.05, rot: 1.8 },
-    { x: size * 0.35, y: size * 0.65, r: size * 0.05, rot: 2.2 },
-    { x: size * 0.65, y: size * 0.65, r: size * 0.05, rot: 0.4 },
-  ];
-
-  for (const p of positions) {
-    drawPentagon(p.x, p.y, p.r, p.rot);
-  }
-
-  for (let i = 0; i < 30; i++) {
-    const x = Math.random() * size;
-    const y = Math.random() * size;
-    ctx.beginPath();
-    ctx.arc(x, y, Math.random() * 3 + 1, 0, Math.PI * 2);
-    ctx.fillStyle = `rgba(0,0,0,${Math.random() * 0.15})`;
-    ctx.fill();
-  }
-
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.wrapS = THREE.RepeatWrapping;
-  texture.wrapT = THREE.RepeatWrapping;
-  texture.repeat.set(1, 1);
-  return texture;
-}
-
-function Football({ side, onImpact }: { side: "left" | "right"; onImpact: () => void }) {
-  const meshRef = useRef<THREE.Mesh>(null);
-  const texture = useMemo(() => generateFootballTexture(), []);
-  const startX = side === "left" ? -8 : 8;
-  const dir = side === "left" ? 1 : -1;
-
-  useFrame(({ clock }) => {
-    const t = clock.getElapsedTime();
-    if (!meshRef.current) return;
-
-    const duration = 0.8;
-    const progress = Math.min(t / duration, 1);
-    const eased = 1 - Math.pow(1 - progress, 3);
-
-    meshRef.current.position.x = startX + dir * eased * 12;
-    meshRef.current.position.y = Math.sin(eased * Math.PI * 1.5) * 1.5;
-    meshRef.current.position.z = 5 - eased * 7;
-
-    const grow = 1 + eased * 4;
-    meshRef.current.scale.setScalar(grow);
-
-    meshRef.current.rotation.x += 0.08;
-    meshRef.current.rotation.y += 0.12;
-    meshRef.current.rotation.z += 0.04;
-
-    if (progress >= 1) {
-      onImpact();
-    }
-  });
-
+function BallSVG() {
   return (
-    <mesh ref={meshRef}>
-      <sphereGeometry args={[0.5, 32, 32]} />
-      <meshStandardMaterial
-        map={texture}
-        roughness={0.4}
-        metalness={0.1}
-      />
-    </mesh>
+    <div className="h-full w-full drop-shadow-[0_0_60px_rgba(235,86,0,0.4)]">
+      {BALL_SVG}
+      <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent rounded-full" />
+    </div>
   );
 }
 
-function ShatterParticles({ count = 40 }: { count?: number }) {
-  const groupRef = useRef<THREE.Group>(null);
-  const particles = useMemo(() => {
-    return Array.from({ length: count }, () => ({
-      offset: new THREE.Vector3(
-        (Math.random() - 0.5) * 0.5,
-        (Math.random() - 0.5) * 0.5,
-        (Math.random() - 0.5) * 0.5,
-      ),
-      velocity: new THREE.Vector3(
-        (Math.random() - 0.5) * 12,
-        (Math.random() - 0.5) * 12,
-        (Math.random() - 0.5) * 12 - 5,
-      ),
-      size: Math.random() * 0.12 + 0.03,
-      color: Math.random() > 0.3 ? "#f0ead6" : "#1a1a1a",
-    }));
-  }, [count]);
-
-  useFrame(({ clock }) => {
-    if (!groupRef.current) return;
-    const t = clock.getElapsedTime();
-    groupRef.current.children.forEach((child, i) => {
-      const p = particles[i];
-      child.position.x = p.offset.x + p.velocity.x * t;
-      child.position.y = p.offset.y + p.velocity.y * t - 4.9 * t * t;
-      child.position.z = p.offset.z + p.velocity.z * t;
-      child.rotation.x += 0.1;
-      child.rotation.y += 0.15;
-    });
-  });
-
+function GlassShards({ onDone }: { onDone: () => void }) {
   return (
-    <group ref={groupRef}>
-      {particles.map((p, i) => (
-        <mesh key={i} position={p.offset}>
-          <boxGeometry args={[p.size, p.size, p.size]} />
-          <meshStandardMaterial color={p.color} roughness={0.6} />
-        </mesh>
+    <div className="pointer-events-none absolute inset-0 z-40">
+      {SHARDS.map((shard, i) => (
+        <motion.div
+          key={i}
+          className="absolute inset-0 bg-base"
+          style={{ clipPath: shard.clip }}
+          initial={{ x: 0, y: 0, rotate: 0, opacity: 1 }}
+          animate={{
+            x: shard.drift.x[1],
+            y: shard.drift.y[1],
+            rotate: shard.drift.r[1],
+            opacity: [1, 1, 0],
+          }}
+          transition={{
+            duration: 0.8,
+            delay: 0.05 * i,
+            ease: [0.25, 0.46, 0.45, 0.94],
+            opacity: { duration: 0.6, times: [0, 0.5, 1] },
+          }}
+          onAnimationComplete={i === SHARDS.length - 1 ? onDone : undefined}
+        />
       ))}
-    </group>
+    </div>
   );
 }
 
-function FootballScene({ show, onGoalText }: { show: boolean; side: "left" | "right"; onGoalText: () => void }) {
-  const [phase, setPhase] = useState<"fly" | "impact" | "goal">("fly");
+function ShatterParticles({ show }: { show: boolean }) {
+  const particles = Array.from({ length: 60 }, (_, i) => ({
+    id: i,
+    x: (Math.random() - 0.5) * 60,
+    y: (Math.random() - 0.5) * 60,
+    size: Math.random() * 6 + 2,
+    color: Math.random() > 0.35 ? "#F5F5F5" : "#1a1a1a",
+    angle: Math.random() * 360,
+    dist: Math.random() * 120 + 40,
+    delay: Math.random() * 0.15,
+  }));
 
-  useEffect(() => {
-    if (!show) {
-      setPhase("fly");
-    }
-  }, [show]);
-
-  const handleImpact = () => {
-    setPhase("impact");
-    setTimeout(() => {
-      setPhase("goal");
-      onGoalText();
-    }, 300);
-  };
-
-  return (
-    <Canvas
-      dpr={[1, 2]}
-      camera={{ position: [0, 0, 6], fov: 60 }}
-      style={{ position: "absolute", inset: 0, zIndex: 40, pointerEvents: "none" }}
-      gl={{ alpha: true }}
-    >
-      <ambientLight intensity={0.6} />
-      <directionalLight position={[5, 5, 5]} intensity={0.8} />
-      <directionalLight position={[-3, 2, -3]} intensity={0.3} />
-      {phase === "fly" && <Football side="left" onImpact={handleImpact} />}
-      {phase === "goal" && <ShatterParticles count={50} />}
-    </Canvas>
-  );
-}
-
-function CrackOverlay({ show }: { show: boolean }) {
   return (
     <AnimatePresence>
       {show && (
-        <motion.svg
-          className="pointer-events-none absolute inset-0 z-30 h-full w-full"
-          viewBox="0 0 100 100"
-          preserveAspectRatio="none"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.15 }}
-        >
-          <defs>
-            <filter id="glow">
-              <feGaussianBlur stdDeviation="0.5" result="blur" />
-              <feMerge>
-                <feMergeNode in="blur" />
-                <feMergeNode in="SourceGraphic" />
-              </feMerge>
-            </filter>
-          </defs>
-          <line x1="20" y1="10" x2="45" y2="40" stroke="rgba(235,86,0,0.6)" strokeWidth="0.3" filter="url(#glow)" />
-          <line x1="45" y1="40" x2="55" y2="80" stroke="rgba(235,86,0,0.5)" strokeWidth="0.25" filter="url(#glow)" />
-          <line x1="55" y1="80" x2="30" y2="95" stroke="rgba(235,86,0,0.3)" strokeWidth="0.2" filter="url(#glow)" />
-          <line x1="45" y1="40" x2="70" y2="30" stroke="rgba(235,86,0,0.4)" strokeWidth="0.2" filter="url(#glow)" />
-          <line x1="70" y1="30" x2="85" y2="50" stroke="rgba(235,86,0,0.3)" strokeWidth="0.15" filter="url(#glow)" />
-          <line x1="45" y1="40" x2="50" y2="15" stroke="rgba(235,86,0,0.35)" strokeWidth="0.2" filter="url(#glow)" />
-          <line x1="50" y1="15" x2="65" y2="5" stroke="rgba(235,86,0,0.25)" strokeWidth="0.15" filter="url(#glow)" />
-          <line x1="30" y1="60" x2="15" y2="55" stroke="rgba(235,86,0,0.25)" strokeWidth="0.15" filter="url(#glow)" />
-          <line x1="60" y1="70" x2="80" y2="75" stroke="rgba(235,86,0,0.2)" strokeWidth="0.12" filter="url(#glow)" />
-        </motion.svg>
+        <div className="pointer-events-none absolute inset-0 z-30 overflow-hidden">
+          {particles.map((p) => {
+            const rad = (p.angle * Math.PI) / 180;
+            const tx = Math.cos(rad) * p.dist;
+            const ty = Math.sin(rad) * p.dist - 20;
+            return (
+              <motion.div
+                key={p.id}
+                className="absolute rounded-sm"
+                style={{
+                  left: `calc(50% + ${p.x}px)`,
+                  top: `calc(50% + ${p.y}px)`,
+                  width: p.size,
+                  height: p.size,
+                  backgroundColor: p.color,
+                  borderRadius: Math.random() > 0.5 ? "50%" : "2px",
+                }}
+                initial={{ x: 0, y: 0, opacity: 1, rotate: 0 }}
+                animate={{ x: tx, y: ty + 80, opacity: 0, rotate: Math.random() * 720 - 360 }}
+                transition={{
+                  duration: 1 + Math.random() * 0.5,
+                  delay: p.delay,
+                  ease: [0.25, 0.46, 0.45, 0.94],
+                  opacity: { duration: 0.8, ease: "easeOut" },
+                }}
+              />
+            );
+          })}
+        </div>
       )}
     </AnimatePresence>
   );
 }
 
 function GoalOverlay({ show, scorerName, teamFlag }: GoalOverlayProps) {
-  const [side] = useState<"left" | "right">(() => Math.random() > 0.5 ? "left" : "right");
-  const [impact, setImpact] = useState(false);
-  const [showCrack, setShowCrack] = useState(false);
-  const [showGoalText, setShowGoalText] = useState(false);
-  const [showScorer, setShowScorer] = useState(false);
+  const [phase, setPhase] = useState<"idle" | "fly" | "impact" | "shatter" | "goal">("idle");
+  const [side] = useState(() => Math.random() > 0.5 ? -1 : 1);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!show) {
-      setImpact(false);
-      setShowCrack(false);
-      setShowGoalText(false);
-      setShowScorer(false);
+      setPhase("idle");
+      return;
     }
+    setPhase("fly");
+    const t1 = setTimeout(() => setPhase("impact"), 900);
+    const t2 = setTimeout(() => setPhase("shatter"), 1100);
+    const t3 = setTimeout(() => setPhase("goal"), 1600);
+    return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); };
   }, [show]);
-
-  const handleImpact = () => {
-    setImpact(true);
-    setShowCrack(true);
-  };
-
-  const handleGoalText = () => {
-    setShowGoalText(true);
-    setTimeout(() => setShowScorer(true), 300);
-  };
 
   return (
     <AnimatePresence>
       {show && (
         <motion.div
+          ref={containerRef}
           className="pointer-events-none fixed inset-0 z-50 flex items-center justify-center overflow-hidden"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          transition={{ duration: 0.15 }}
+          transition={{ duration: 0.1 }}
         >
           {/* Flash on impact */}
           <motion.div
-            className="absolute inset-0 bg-accent/15"
-            animate={{ opacity: impact ? [0, 0.6, 0] : 0 }}
-            transition={{ duration: 0.4 }}
+            className="absolute inset-0 z-10"
+            animate={{
+              backgroundColor:
+                phase === "impact" ? "rgba(235,86,0,0.35)" :
+                phase === "shatter" ? "rgba(235,86,0,0.08)" :
+                "transparent",
+            }}
+            transition={{ duration: 0.2 }}
           />
 
-          {/* Screen shake on impact */}
+          {/* Screen shake wrapper */}
           <motion.div
-            className="absolute inset-0"
+            className="absolute inset-0 z-20"
             animate={
-              impact
+              phase === "impact"
                 ? {
-                    x: [0, -4, 4, -3, 3, -2, 2, -1, 1, 0],
-                    y: [0, 3, -4, 2, -3, 1, -2, 0, 1, 0],
-                    rotate: [0, -1, 1, -0.8, 0.8, -0.5, 0.5, -0.3, 0.3, 0],
+                    x: [0, -6, 6, -5, 5, -4, 4, -2, 2, -1, 1, 0],
+                    y: [0, 4, -6, 3, -5, 2, -3, 1, -2, 0, 1, 0],
+                    rotate: [0, -1.5, 1.5, -1, 1, -0.8, 0.8, -0.4, 0.4, -0.2, 0.2, 0],
                   }
                 : { x: 0, y: 0, rotate: 0 }
             }
-            transition={{ duration: 0.5, ease: "easeOut" }}
+            transition={{
+              duration: 0.7,
+              ease: [0.36, 0.07, 0.19, 0.97],
+            }}
           >
-            <FootballScene show={show} side={side} onGoalText={handleGoalText} />
+            {/* 3D perspective ball */}
+            <motion.div
+              className="absolute"
+              style={{
+                left: "50%",
+                top: "50%",
+                width: 100,
+                height: 100,
+                marginLeft: -50,
+                marginTop: -50,
+                perspective: 1000,
+              }}
+              initial={false}
+              animate={
+                phase === "fly"
+                  ? {
+                      x: [-side * window.innerWidth * 0.6, 0],
+                      y: [60, -20],
+                      width: [40, 420],
+                      height: [40, 420],
+                      marginLeft: [-20, -210],
+                      marginTop: [-20, -210],
+                      rotateX: [0, 720],
+                      rotateY: [0, 540],
+                      rotateZ: [0, 180],
+                      scale: [1, 1],
+                    }
+                  : phase === "impact"
+                    ? {
+                        width: 420,
+                        height: 420,
+                        marginLeft: -210,
+                        marginTop: -210,
+                        scale: [1, 1.15],
+                        opacity: [1, 1, 0],
+                      }
+                    : { width: 420, height: 420, marginLeft: -210, marginTop: -210, opacity: 0, scale: 0.5 }
+              }
+              transition={
+                phase === "fly"
+                  ? {
+                      duration: 0.9,
+                      ease: [0.22, 1, 0.36, 1],
+                      rotateX: { duration: 0.9, ease: "linear" },
+                      rotateY: { duration: 0.9, ease: "linear" },
+                      rotateZ: { duration: 0.9, ease: "linear" },
+                    }
+                  : phase === "impact"
+                    ? { scale: { duration: 0.15 }, opacity: { duration: 0.1, delay: 0.1 } }
+                    : { opacity: { duration: 0.15 } }
+              }
+            >
+              <div
+                className="h-full w-full"
+                style={{ transformStyle: "preserve-3d" }}
+              >
+                <BallSVG />
+                {/* Shine overlay */}
+                <div className="pointer-events-none absolute inset-0 rounded-full bg-gradient-to-br from-white/20 via-transparent to-transparent" />
+                <div className="pointer-events-none absolute inset-0 rounded-full shadow-[inset_0_0_40px_rgba(0,0,0,0.2)]" />
+              </div>
+            </motion.div>
           </motion.div>
 
-          {/* Crack overlay */}
-          <CrackOverlay show={showCrack} />
+          {/* Glass shards */}
+          {(phase === "shatter" || phase === "goal") && (
+            <GlassShards onDone={() => {}} />
+          )}
+
+          {/* Particles */}
+          <ShatterParticles show={phase === "shatter" || phase === "goal"} />
 
           {/* GOAL! text */}
-          <AnimatePresence>
-            {showGoalText && (
+          {(phase === "shatter" || phase === "goal") && (
+            <motion.div
+              className="relative z-50 flex flex-col items-center"
+              initial={{ scale: 0, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{
+                type: "spring",
+                stiffness: 120,
+                damping: 12,
+                mass: 1.2,
+              }}
+            >
+              <motion.span
+                className="font-display text-8xl uppercase tracking-tight text-accent sm:text-9xl"
+                style={{
+                  textShadow:
+                    "0 0 30px rgba(235,86,0,0.7), 0 0 70px rgba(235,86,0,0.4), 0 0 110px rgba(235,86,0,0.2)",
+                  WebkitTextStroke: "1px rgba(255,255,255,0.1)",
+                }}
+                animate={{ scale: [1, 1.04, 1] }}
+                transition={{ duration: 0.6, repeat: Infinity, repeatDelay: 0.8, ease: "easeInOut" }}
+              >
+                GOAL!
+              </motion.span>
+
               <motion.div
-                className="relative z-50 flex flex-col items-center gap-3"
-                initial={{ scale: 2.5, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                exit={{ scale: 0.5, opacity: 0 }}
-                transition={{ type: "spring", stiffness: 180, damping: 14 }}
+                className="flex items-center gap-3 mt-2"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.3, duration: 0.5, ease: "easeOut" }}
               >
                 <motion.span
-                  className="font-display text-8xl uppercase tracking-tight text-accent sm:text-9xl"
-                  style={{
-                    textShadow:
-                      "0 0 40px rgba(235,86,0,0.6), 0 0 80px rgba(235,86,0,0.3), 0 0 120px rgba(235,86,0,0.15)",
-                  }}
-                  animate={{ scale: [1, 1.06, 1] }}
-                  transition={{ duration: 0.4, repeat: Infinity, repeatDelay: 1.5 }}
+                  className="text-3xl"
+                  animate={{ scale: [1, 1.1, 1] }}
+                  transition={{ duration: 0.8, repeat: Infinity, repeatDelay: 0.5 }}
                 >
-                  GOAL!
+                  {teamFlag}
                 </motion.span>
-                {showScorer && (
-                  <motion.div
-                    className="flex items-center gap-2"
-                    initial={{ opacity: 0, y: 15 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.15 }}
-                  >
-                    <span className="text-2xl">{teamFlag}</span>
-                    <span className="font-display text-xl uppercase tracking-wider text-ink">
-                      {scorerName}
-                    </span>
-                  </motion.div>
-                )}
+                <span className="font-display text-2xl uppercase tracking-wider text-ink/90">
+                  {scorerName}
+                </span>
               </motion.div>
-            )}
-          </AnimatePresence>
+
+              {/* Ground shadow pulse */}
+              <motion.div
+                className="mt-6 h-1 w-32 rounded-full bg-accent/30 blur-md"
+                animate={{ scale: [1, 1.3, 1], opacity: [0.3, 0.6, 0.3] }}
+                transition={{ duration: 1, repeat: Infinity }}
+              />
+            </motion.div>
+          )}
         </motion.div>
       )}
     </AnimatePresence>
