@@ -26,10 +26,10 @@ function EscrowStatus({
   return (
     <div
       className={cn(
-        "rounded-lg border bg-surface px-4 py-3 backdrop-blur-sm",
+        "rounded-lg border bg-panel/80 px-4 py-3 backdrop-blur-sm",
         status === "settled"
           ? "border-success/20"
-          : "border-surface-border",
+          : "border-hairline",
         className,
       )}
     >
@@ -40,11 +40,11 @@ function EscrowStatus({
               animate={{ scale: [1, 1.05, 1] }}
               transition={{ duration: 2, repeat: Infinity }}
             >
-              <Lock className="h-4 w-4 text-escrow" />
+              <Lock className="h-4 w-4 text-money/70" />
             </motion.div>
           )}
           {status === "unlocked" && (
-            <Unlock className="h-4 w-4 text-goalnet" />
+            <Unlock className="h-4 w-4 text-money" />
           )}
           {status === "settled" && (
             <motion.div
@@ -58,8 +58,8 @@ function EscrowStatus({
           <span
             className={cn(
               "font-mono text-[11px] uppercase tracking-widest",
-              status === "locked" && "text-escrow",
-              status === "unlocked" && "text-goalnet",
+              status === "locked" && "text-money/70",
+              status === "unlocked" && "text-money",
               status === "settled" && "text-success",
             )}
           >
@@ -67,28 +67,28 @@ function EscrowStatus({
           </span>
         </div>
 
-        <div className="flex items-center gap-3 font-mono text-xs tabular-nums text-chalk">
+        <div className="flex items-center gap-3 font-mono text-xs tabular-nums text-ink">
           <span className="font-display text-lg tracking-tight">
             {totalPot.toLocaleString("en-US")}{" "}
-            <span className="text-[10px] font-mono font-normal text-chalk-muted/40">
+            <span className="text-[10px] font-mono font-normal text-ink-muted/40">
               USDC
             </span>
           </span>
         </div>
       </div>
 
-      <div className="mt-2 flex items-center justify-between border-t border-surface-border pt-2">
-        <div className="flex items-center gap-3 font-mono text-[10px] text-chalk-muted/40">
+      <div className="mt-2 flex items-center justify-between border-t border-hairline pt-2">
+        <div className="flex items-center gap-3 font-mono text-[10px] text-ink-muted/40">
           <span>
             {participantCount} × {entryFee} USDC
           </span>
-          <span className="text-chalk-muted/20">|</span>
+          <span className="text-ink-muted/20">|</span>
           <span>
             Fee: {feeAmount.toLocaleString("en-US")} USDC ({(fee * 100).toFixed(1)}%)
           </span>
         </div>
         {status === "locked" && (
-          <div className="flex items-center gap-1 font-mono text-[10px] text-escrow">
+          <div className="flex items-center gap-1 font-mono text-[10px] text-money/70">
             <Timer className="h-3 w-3" />
             Auto-settle after final match
           </div>
