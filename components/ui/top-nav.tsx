@@ -25,7 +25,7 @@ function TopNav({
   return (
     <nav
       className={cn(
-        "relative z-10 flex h-12 items-center border-b border-hairline px-4",
+        "relative z-10 flex h-12 items-center border-b border-hairline bg-base/80 backdrop-blur-sm px-4",
         className,
       )}
     >

@@ -38,7 +38,7 @@ function LeaderboardRow({
         opacity: 1,
         x: 0,
         backgroundColor: highlight
-          ? "rgba(255, 90, 31, 0.08)"
+          ? "rgba(235, 86, 0, 0.08)"
           : scoreChanged
             ? "rgba(242, 201, 76, 0.08)"
             : "rgba(0,0,0,0)",
@@ -49,8 +49,8 @@ function LeaderboardRow({
       }}
       className={cn(
         "group flex items-center gap-3 border-b border-hairline px-4 py-3 transition-colors sm:px-6",
-        isCurrentUser && "bg-live/5",
-        highlight && "bg-live/5",
+        isCurrentUser && "bg-accent/5",
+        highlight && "bg-accent/5",
       )}
     >
       {/* Rank */}
@@ -61,7 +61,7 @@ function LeaderboardRow({
               "font-display text-lg",
               rank === 1 && "text-money",
               rank === 2 && "text-ink-muted",
-              rank === 3 && "text-live/70",
+              rank === 3 && "text-accent/70",
             )}
           >
             {rank === 1 ? "🥇" : rank === 2 ? "🥈" : "🥉"}
@@ -81,7 +81,7 @@ function LeaderboardRow({
             className={cn(
               "truncate font-body text-sm font-medium",
               isCurrentUser
-                ? "text-live"
+                ? "text-accent"
                 : rank <= 3
                   ? "text-ink"
                   : "text-ink-muted",
@@ -89,7 +89,7 @@ function LeaderboardRow({
           >
             {participant.name}
             {isCurrentUser && (
-              <span className="ml-2 font-mono text-[9px] uppercase tracking-widest text-live/60">
+              <span className="ml-2 font-mono text-[9px] uppercase tracking-widest text-accent/60">
                 (you)
               </span>
             )}

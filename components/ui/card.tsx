@@ -12,12 +12,12 @@ function Card({
   return (
     <div
       className={cn(
-        "rounded-lg bg-panel/80 backdrop-blur-sm",
+        "rounded-lg bg-panel backdrop-blur-sm",
         {
           default: "border border-hairline",
-          bordered: "border-2 border-ink/10",
+          bordered: "border-2 border-elevated",
           elevated:
-            "border border-hairline shadow-lg shadow-black/20",
+            "border border-hairline shadow-xl shadow-black/30",
         }[variant],
         className,
       )}

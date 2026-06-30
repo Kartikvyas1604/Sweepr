@@ -35,7 +35,7 @@ function ParticipantsDrawer({
             exit={{ y: "100%" }}
             transition={{ type: "spring", stiffness: 300, damping: 30 }}
           >
-            <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-ink/20" />
+            <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-elevated" />
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Users className="h-4 w-4 text-ink-muted" />
@@ -54,7 +54,7 @@ function ParticipantsDrawer({
               {participants.map((p, i) => (
                 <div
                   key={p.id}
-                  className="flex items-center gap-3 rounded-md px-3 py-2.5 transition-colors hover:bg-ink/5"
+                  className="flex items-center gap-3 rounded-md px-3 py-2.5 transition-colors hover:bg-elevated/30"
                 >
                   <span className="font-mono text-[11px] tabular-nums text-ink-muted/40 w-6">
                     {i + 1}

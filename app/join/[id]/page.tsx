@@ -54,7 +54,7 @@ export default function JoinPage() {
         <main className="relative z-10 flex flex-1 items-center justify-center px-4 py-12">
           <Card>
             <CardContent className="flex flex-col items-center gap-4 py-12">
-              <AlertCircle className="h-8 w-8 text-live" />
+              <AlertCircle className="h-8 w-8 text-accent" />
               <p className="font-display text-sm uppercase tracking-wider text-ink">Pool not found</p>
               <Button size="sm" onClick={() => router.push("/")}>Create a pool</Button>
             </CardContent>
@@ -104,7 +104,7 @@ export default function JoinPage() {
                           {pool.name}
                         </p>
                         <p className="mt-1 flex items-center gap-1.5 font-mono text-[10px] text-ink-muted/40">
-                          <EyeOff className="h-3 w-3 text-live" />
+                          <EyeOff className="h-3 w-3 text-accent" />
                           Private pool — passphrase required
                         </p>
                       </div>
@@ -149,9 +149,9 @@ export default function JoinPage() {
                         </p>
                         <p className="mt-1 flex items-center gap-1.5 font-mono text-[10px] text-ink-muted/40">
                           {pool.isPrivate ? (
-                            <><EyeOff className="h-3 w-3 text-live" /> Private</>
+                            <><EyeOff className="h-3 w-3 text-accent" /> Private</>
                           ) : (
-                            <><Globe className="h-3 w-3 text-money" /> Public</>
+                            <><Globe className="h-3 w-3 text-ink-muted" /> Public</>
                           )}
                         </p>
                       </div>
@@ -160,7 +160,7 @@ export default function JoinPage() {
                   </CardHeader>
                   <CardContent className="flex flex-col gap-6">
                     <div className="grid grid-cols-3 gap-3">
-                      <div className="flex flex-col items-center gap-1 rounded-md bg-ink/5 px-3 py-3">
+                      <div className="flex flex-col items-center gap-1 rounded-md bg-elevated/30 px-3 py-3">
                         <DollarSign className="h-4 w-4 text-money" />
                         <span className="font-mono text-sm font-medium text-ink">
                           {pool.entryFee}
@@ -169,8 +169,8 @@ export default function JoinPage() {
                           Buy-in
                         </span>
                       </div>
-                      <div className="flex flex-col items-center gap-1 rounded-md bg-ink/5 px-3 py-3">
-                        <Users className="h-4 w-4 text-live" />
+                      <div className="flex flex-col items-center gap-1 rounded-md bg-elevated/30 px-3 py-3">
+                        <Users className="h-4 w-4 text-ink-muted" />
                         <span className="font-mono text-sm font-medium text-ink">
                           {pool.participantCount}
                         </span>
@@ -178,7 +178,7 @@ export default function JoinPage() {
                           In
                         </span>
                       </div>
-                      <div className="flex flex-col items-center gap-1 rounded-md bg-ink/5 px-3 py-3">
+                      <div className="flex flex-col items-center gap-1 rounded-md bg-elevated/30 px-3 py-3">
                         <span className="font-mono text-[11px] font-medium tracking-wider text-money">
                           {countdown.days}d
                         </span>
@@ -231,7 +231,7 @@ export default function JoinPage() {
                       <p className="font-display text-sm uppercase tracking-wider text-ink">
                         Your Draw
                       </p>
-                      <Badge variant="live" size="sm">
+                      <Badge variant="outline" size="sm">
                         Random
                       </Badge>
                     </div>

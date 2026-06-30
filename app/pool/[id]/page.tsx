@@ -66,7 +66,7 @@ export default function PoolPage() {
         <main className="relative z-10 mx-auto flex w-full max-w-4xl flex-1 flex-col items-center justify-center px-4 py-12">
           <Card>
             <CardContent className="flex flex-col items-center gap-4 py-12">
-              <AlertCircle className="h-8 w-8 text-live" />
+              <AlertCircle className="h-8 w-8 text-accent" />
               <p className="font-display text-sm uppercase tracking-wider text-ink">Pool not found</p>
               <Button size="sm" onClick={() => router.push("/")}>Create a pool</Button>
             </CardContent>
@@ -102,14 +102,14 @@ export default function PoolPage() {
               </h1>
               <div className="mt-1 flex items-center gap-3">
                 <LiveIndicator />
-                <Badge variant="default" size="sm">{participants.length} players</Badge>
+                <Badge variant="elevated" size="sm">{participants.length} players</Badge>
                 {pool.isPrivate ? (
-                  <Badge variant="live" size="sm">
+                  <Badge variant="outline" size="sm">
                     <EyeOff className="h-2.5 w-2.5" />
                     Private
                   </Badge>
                 ) : (
-                  <Badge variant="money" size="sm">
+                  <Badge variant="outline" size="sm">
                     <Globe className="h-2.5 w-2.5" />
                     Public
                   </Badge>
@@ -212,8 +212,8 @@ export default function PoolPage() {
             <CardHeader>
               <div className="flex items-center gap-2">
                 <span className="relative flex h-2 w-2">
-                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-live opacity-60" />
-                  <span className="relative inline-flex h-2 w-2 rounded-full bg-live" />
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-accent opacity-60" />
+                  <span className="relative inline-flex h-2 w-2 rounded-full bg-accent" />
                 </span>
                 <span className="font-display text-sm uppercase tracking-wider text-ink">
                   Live Matches
@@ -221,7 +221,7 @@ export default function PoolPage() {
               </div>
             </CardHeader>
             <CardContent className="flex flex-col gap-2">
-              <div className="flex items-center justify-between rounded-md bg-ink/5 px-4 py-3">
+              <div className="flex items-center justify-between rounded-md bg-elevated/30 px-4 py-3">
                 <div className="flex items-center gap-3">
                   <span className="text-lg">🇧🇷</span>
                   <span className="font-body text-sm font-medium text-ink">Brazil</span>
@@ -236,7 +236,7 @@ export default function PoolPage() {
                   <span className="text-lg">🇷🇸</span>
                 </div>
               </div>
-              <div className="flex items-center justify-between rounded-md bg-ink/5 px-4 py-3">
+              <div className="flex items-center justify-between rounded-md bg-elevated/30 px-4 py-3">
                 <div className="flex items-center gap-3">
                   <span className="text-lg">🇦🇷</span>
                   <span className="font-body text-sm font-medium text-ink">Argentina</span>

@@ -1,31 +1,19 @@
 @import "tailwindcss";
 
 @theme inline {
-  /* ── Floodlit pitch at night ── */
-  --color-base: #0B1410;
-  --color-panel: #13241B;
-  --color-ink: #F4F1E8;
-  --color-ink-muted: #8FA396;
-  --color-live: #FF5A1F;
+  --color-base: #14120B;
+  --color-panel: #1B1913;
+  --color-elevated: #2A2822;
+  --color-ink: #EDECEC;
+  --color-ink-muted: #969592;
+  --color-accent: #EB5600;
+  --color-live: #EB5600;
   --color-money: #F2C94C;
-  --color-hairline: rgba(143, 163, 150, 0.15);
-
-  /* ── Legacy aliases (keep migrating off) ── */
-  --color-pitch: #0B1410;
-  --color-pitch-light: #13241B;
-  --color-chalk: #F4F1E8;
-  --color-chalk-muted: #8FA396;
-  --color-flare: #FF5A1F;
-  --color-flare-glow: rgba(255, 90, 31, 0.25);
-  --color-goalnet: #F2C94C;
-  --color-goalnet-dim: rgba(242, 201, 76, 0.15);
-  --color-money-dim: rgba(242, 201, 76, 0.15);
   --color-success: #4ADE80;
-  --color-surface: rgba(19, 36, 27, 0.85);
-  --color-surface-border: var(--color-hairline);
+  --color-hairline: rgba(150, 149, 146, 0.12);
 
-  --font-display: "Anton", sans-serif;
-  --font-body: "Fraunces", serif;
+  --font-display: "Bricolage Grotesque", sans-serif;
+  --font-body: "Plus Jakarta Sans", sans-serif;
   --font-mono: "JetBrains Mono", monospace;
 }
 
@@ -37,17 +25,17 @@
   body {
     background-color: var(--color-base);
     background-image:
+      radial-gradient(
+        ellipse 80% 60% at 50% -10%,
+        rgba(150, 149, 146, 0.03) 0%,
+        transparent 70%
+      ),
       repeating-linear-gradient(
         0deg,
         transparent,
         transparent 40px,
-        rgba(143, 163, 150, 0.025) 40px,
-        rgba(143, 163, 150, 0.025) 41px
-      ),
-      radial-gradient(
-        ellipse at 50% 0%,
-        rgba(143, 163, 150, 0.05) 0%,
-        transparent 70%
+        rgba(150, 149, 146, 0.02) 40px,
+        rgba(150, 149, 146, 0.02) 41px
       );
     color: var(--color-ink);
     font-family: var(--font-body);
@@ -56,27 +44,11 @@
   }
 
   ::selection {
-    background-color: var(--color-live);
+    background-color: var(--color-accent);
     color: var(--color-base);
   }
 
   .tabular-nums {
     font-variant-numeric: tabular-nums;
-  }
-}
-
-@layer utilities {
-  .text-balance {
-    text-wrap: balance;
-  }
-
-  .bg-scanlines {
-    background-image: repeating-linear-gradient(
-      0deg,
-      transparent,
-      transparent 2px,
-      rgba(143, 163, 150, 0.025) 2px,
-      rgba(143, 163, 150, 0.025) 4px
-    );
   }
 }

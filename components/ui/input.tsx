@@ -31,14 +31,14 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
             "focus:outline-none focus:ring-1",
             "disabled:opacity-40 disabled:cursor-not-allowed",
             error
-              ? "border-live/60 bg-live/5 focus:border-live focus:ring-live/20"
-              : "border-hairline bg-panel/50 focus:border-live/50 focus:ring-live/20",
+              ? "border-accent/60 bg-accent/5 focus:border-accent focus:ring-accent/20"
+              : "border-hairline bg-elevated/30 focus:border-accent/50 focus:ring-accent/20",
             className,
           )}
           {...props}
         />
         {error && (
-          <p className="font-mono text-[10px] text-live">{error}</p>
+          <p className="font-mono text-[10px] text-accent">{error}</p>
         )}
       </div>
     );

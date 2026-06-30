@@ -54,7 +54,7 @@ function TeamAssignment({ onAssigned, participantName }: TeamAssignmentProps) {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
           >
-            <div className="flex h-28 w-28 items-center justify-center rounded-full border-2 border-dashed border-ink/20">
+            <div className="flex h-28 w-28 items-center justify-center rounded-full border-2 border-dashed border-hairline">
               <span className="font-display text-4xl text-ink-muted/40">?</span>
             </div>
             <p className="text-center font-body text-sm leading-relaxed text-ink-muted">
@@ -78,13 +78,13 @@ function TeamAssignment({ onAssigned, participantName }: TeamAssignmentProps) {
             exit={{ opacity: 0 }}
           >
             <motion.div
-              className="flex h-36 w-36 items-center justify-center rounded-full border-2 border-live/30 bg-live/5"
+              className="flex h-36 w-36 items-center justify-center rounded-full border-2 border-accent/30 bg-accent/5"
               animate={{ scale: [1, 1.05, 1], rotate: [0, 3, -3, 0] }}
               transition={{ duration: 0.2, repeat: Infinity }}
             >
               <span className="text-5xl">{currentTeam.flag}</span>
             </motion.div>
-            <p className="font-display text-xl uppercase tracking-wider text-live">
+            <p className="font-display text-xl uppercase tracking-wider text-accent">
               {currentTeam.name}
             </p>
             <p className="font-mono text-[10px] uppercase tracking-widest text-ink-muted/40">

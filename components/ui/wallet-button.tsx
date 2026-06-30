@@ -19,7 +19,7 @@ function WalletButton({ className }: WalletButtonProps) {
         "flex items-center gap-2 rounded-md border px-3 py-1.5 font-mono text-[11px] uppercase tracking-wider transition-all duration-200",
         connected
           ? "border-success/20 bg-success/5 text-success hover:bg-success/10"
-          : "border-ink/10 text-ink-muted hover:border-ink/20 hover:text-ink",
+          : "border-hairline text-ink-muted hover:border-ink-muted/30 hover:text-ink",
         className,
       )}
     >

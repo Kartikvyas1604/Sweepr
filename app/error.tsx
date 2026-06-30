@@ -21,7 +21,7 @@ export default function Error({ reset }: ErrorProps) {
           animate={{ rotate: [0, 10, -10, 0] }}
           transition={{ duration: 1, repeat: Infinity }}
         >
-          <AlertTriangle className="h-16 w-16 text-live/60" />
+          <AlertTriangle className="h-16 w-16 text-accent/60" />
         </motion.div>
         <div>
           <p className="font-display text-xl uppercase tracking-wider text-ink">

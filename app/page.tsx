@@ -59,8 +59,8 @@ export default function Home() {
         <div className="flex w-full items-center justify-between font-mono text-[10px] uppercase tracking-[0.2em] text-ink-muted/60">
           <span className="flex items-center gap-2">
             <span className="relative flex h-1.5 w-1.5">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-live opacity-60" />
-              <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-live" />
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-accent opacity-60" />
+              <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-accent" />
             </span>
             LIVE ODDS
           </span>
@@ -83,8 +83,8 @@ export default function Home() {
             }}
           >
             <motion.div variants={STAGGER} custom={0}>
-              <div className="inline-flex items-center gap-3 rounded-full border border-hairline bg-ink/5 px-4 py-1.5 font-mono text-[10px] uppercase tracking-[0.25em] text-ink-muted">
-                <Sparkles className="h-3 w-3 text-money" />
+              <div className="inline-flex items-center gap-3 rounded-full border border-hairline bg-elevated/50 px-4 py-1.5 font-mono text-[10px] uppercase tracking-[0.25em] text-ink-muted">
+                <Sparkles className="h-3 w-3 text-accent" />
                 on-chain • trustless • instant
               </div>
             </motion.div>
@@ -105,7 +105,7 @@ export default function Home() {
                 {[...Array(4)].map((_, i) => (
                   <div
                     key={i}
-                    className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-base bg-panel text-[10px] font-bold text-ink-muted"
+                    className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-elevated bg-panel text-[10px] font-bold text-ink-muted"
                   >
                     {["🇧🇷", "🇦🇷", "🇫🇷", "🏴󠁧󠁢󠁥󠁮󠁧󠁿"][i]}
                   </div>
@@ -155,8 +155,8 @@ export default function Home() {
                     onClick={() => { setIsPrivate(false); setPassphrase(""); }}
                     className={`flex flex-1 items-center justify-center gap-2 rounded-md border px-3 py-2.5 font-mono text-[11px] uppercase tracking-wider transition-all ${
                       !isPrivate
-                        ? "border-money/40 bg-money/10 text-money"
-                        : "border-hairline bg-ink/5 text-ink-muted/50 hover:border-ink/20"
+                        ? "border-accent/40 bg-accent/10 text-accent"
+                        : "border-hairline bg-elevated/30 text-ink-muted/50 hover:border-ink-muted/30"
                     }`}
                   >
                     <Globe className="h-3.5 w-3.5" />
@@ -167,8 +167,8 @@ export default function Home() {
                     onClick={() => setIsPrivate(true)}
                     className={`flex flex-1 items-center justify-center gap-2 rounded-md border px-3 py-2.5 font-mono text-[11px] uppercase tracking-wider transition-all ${
                       isPrivate
-                        ? "border-live/40 bg-live/10 text-live"
-                        : "border-hairline bg-ink/5 text-ink-muted/50 hover:border-ink/20"
+                        ? "border-accent/40 bg-accent/10 text-accent"
+                        : "border-hairline bg-elevated/30 text-ink-muted/50 hover:border-ink-muted/30"
                     }`}
                   >
                     <EyeOff className="h-3.5 w-3.5" />
@@ -231,8 +231,8 @@ export default function Home() {
               >
                 <Card className="h-full text-center">
                   <CardContent className="flex flex-col items-center gap-3 py-6">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-ink/5">
-                      <step.icon className="h-5 w-5 text-live" />
+                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-elevated/50">
+                      <step.icon className="h-5 w-5 text-accent" />
                     </div>
                     <div>
                       <p className="font-display text-sm uppercase tracking-wider text-ink">

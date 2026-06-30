@@ -26,7 +26,7 @@ function EscrowStatus({
   return (
     <div
       className={cn(
-        "rounded-lg border bg-panel/80 px-4 py-3 backdrop-blur-sm",
+        "rounded-lg border bg-panel px-4 py-3 backdrop-blur-sm",
         status === "settled"
           ? "border-success/20"
           : "border-hairline",

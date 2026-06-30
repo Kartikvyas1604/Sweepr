@@ -10,7 +10,7 @@ import { TopNav } from "@/components/ui/top-nav";
 import { WalletButton } from "@/components/ui/wallet-button";
 import { getPools } from "@/lib/store";
 import type { Pool } from "@/lib/types";
-import { Plus, Users, Trophy, ArrowRight, Globe, EyeOff } from "lucide-react";
+import { Plus, Users, ArrowRight, Globe, EyeOff } from "lucide-react";
 
 export default function PoolsPage() {
   const router = useRouter();
@@ -68,13 +68,13 @@ export default function PoolsPage() {
                 transition={{ delay: i * 0.08, duration: 0.3 }}
               >
                 <Card
-                  className="cursor-pointer transition-all duration-200 hover:border-ink/20 hover:bg-ink/[0.02]"
+                  className="cursor-pointer transition-all duration-200 hover:bg-elevated/20"
                   onClick={() => router.push(`/pool/${pool.id}`)}
                 >
                   <CardContent className="flex items-center justify-between py-4">
                     <div className="flex items-center gap-4">
-                      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-live/10">
-                        <Users className="h-5 w-5 text-live" />
+                      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-elevated/50">
+                        <Users className="h-5 w-5 text-ink-muted" />
                       </div>
                       <div>
                         <p className="font-body text-sm font-medium text-ink">
@@ -92,12 +92,12 @@ export default function PoolsPage() {
 
                     <div className="flex items-center gap-3">
                       {pool.isPrivate ? (
-                        <Badge variant="live" size="sm">
+                        <Badge variant="outline" size="sm">
                           <EyeOff className="h-2.5 w-2.5" />
                           Private
                         </Badge>
                       ) : (
-                        <Badge variant="money" size="sm">
+                        <Badge variant="outline" size="sm">
                           <Globe className="h-2.5 w-2.5" />
                           Public
                         </Badge>

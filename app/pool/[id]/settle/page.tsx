@@ -64,7 +64,7 @@ export default function SettlePage() {
       Array.from({ length: 30 }, (_, i) => ({
         id: i,
         left: `${(i * 3.7 + 13) % 100}%`,
-        color: ["#FF6B35", "#F7D44A", "#4ADE80", "#4A90D9", "#F0F0E8"][i % 5],
+        color: ["#EB5600", "#F7D44A", "#4ADE80", "#969592", "#EDECEC"][i % 5],
         targetLeft: `${(i * 7.1 + 42) % 100}%`,
         rotate: (i * 37 + 180) % 720,
         duration: 3 + (i % 5) * 0.4,
@@ -328,7 +328,7 @@ export default function SettlePage() {
                     </div>
 
                     {/* Payout breakdown */}
-                    <div className="w-full space-y-2 rounded-lg bg-ink/5 px-4 py-4">
+                    <div className="w-full space-y-2 rounded-lg bg-elevated/30 px-4 py-4">
                       <div className="flex items-center justify-between font-mono text-xs text-ink-muted">
                         <span>Total Pot</span>
                         <span className="tabular-nums text-ink">80 USDC</span>
@@ -349,7 +349,7 @@ export default function SettlePage() {
 
                     {/* Transaction */}
                     <div className="w-full space-y-2">
-                      <div className="flex items-center justify-between rounded-md bg-ink/5 px-4 py-2.5">
+                      <div className="flex items-center justify-between rounded-md bg-elevated/30 px-4 py-2.5">
                         <span className="font-mono text-[10px] uppercase tracking-widest text-ink-muted/40">
                           Transaction
                         </span>
@@ -357,13 +357,13 @@ export default function SettlePage() {
                           href={`https://solscan.io/tx/${TX_HASH}`}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="flex items-center gap-1.5 font-mono text-xs text-money transition-colors hover:text-money/80"
+                          className="flex items-center gap-1.5 font-mono text-xs text-accent transition-colors hover:text-accent/80"
                         >
                           {formatAddress(TX_HASH)}
                           <ExternalLink className="h-3 w-3" />
                         </a>
                       </div>
-                      <div className="flex items-center justify-between rounded-md bg-ink/5 px-4 py-2.5">
+                      <div className="flex items-center justify-between rounded-md bg-elevated/30 px-4 py-2.5">
                         <span className="font-mono text-[10px] uppercase tracking-widest text-ink-muted/40">
                           Winner
                         </span>
