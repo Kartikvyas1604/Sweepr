@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -13,7 +13,7 @@ import { GoalOverlay } from "@/components/ui/goal-overlay";
 import { TopNav } from "@/components/ui/top-nav";
 import { ShareButton } from "@/components/ui/share-button";
 import type { Participant } from "@/lib/types";
-import { Trophy, Goal } from "lucide-react";
+import { Trophy, Goal, Coins } from "lucide-react";
 
 const MOCK_PARTICIPANTS: Participant[] = [
   { id: "1", name: "Alex", walletAddress: "0x1234...5678", team: { name: "Brazil", flag: "🇧🇷", group: "A" }, score: 12, rank: 1 },
@@ -28,6 +28,7 @@ const MOCK_PARTICIPANTS: Participant[] = [
 
 export default function PoolPage() {
   const params = useParams();
+  const router = useRouter();
   const [participants, setParticipants] = useState(MOCK_PARTICIPANTS);
   const [lastGoal, setLastGoal] = useState<string | null>(null);
   const [showGoalOverlay, setShowGoalOverlay] = useState(false);
@@ -94,6 +95,14 @@ export default function PoolPage() {
             >
               <Goal className="h-3.5 w-3.5" />
               Sim Goal
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() => router.push(`/pool/${params.id}/settle`)}
+            >
+              <Coins className="h-3.5 w-3.5" />
+              Settle
             </Button>
           </div>
         </motion.div>

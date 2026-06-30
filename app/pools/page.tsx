@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -39,6 +40,7 @@ const MOCK_POOLS = [
 ];
 
 export default function PoolsPage() {
+  const router = useRouter();
   return (
     <div className="relative flex min-h-dvh flex-col">
       <TopNav title="My Pools" right={<WalletButton />} />
@@ -58,7 +60,7 @@ export default function PoolsPage() {
               {MOCK_POOLS.length} active pools
             </p>
           </div>
-          <Button size="md">
+          <Button size="md" onClick={() => router.push("/")}>
             <Plus className="h-4 w-4" />
             New Pool
           </Button>
@@ -75,7 +77,13 @@ export default function PoolsPage() {
             >
               <Card
                 className="cursor-pointer transition-all duration-200 hover:border-chalk/20 hover:bg-chalk/[0.02]"
-                onClick={() => {}}
+                onClick={() =>
+                  router.push(
+                    pool.status === "settled"
+                      ? `/pool/${pool.id}/settle`
+                      : `/pool/${pool.id}`,
+                  )
+                }
               >
                 <CardContent className="flex items-center justify-between py-4">
                   <div className="flex items-center gap-4">

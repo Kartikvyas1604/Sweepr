@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -38,6 +38,7 @@ enum Phase {
 
 export default function SettlePage() {
   const params = useParams();
+  const router = useRouter();
   const [phase, setPhase] = useState<Phase>(Phase.Locked);
   const [showConfetti, setShowConfetti] = useState(false);
 
@@ -372,7 +373,12 @@ export default function SettlePage() {
                       </div>
                     </div>
 
-                    <Button size="lg" className="w-full" variant="primary">
+                    <Button
+                      size="lg"
+                      className="w-full"
+                      variant="primary"
+                      onClick={() => router.push(`/pool/${params.id}`)}
+                    >
                       View Pool Recap
                       <ArrowRight className="h-4 w-4" />
                     </Button>

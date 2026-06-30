@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -30,6 +31,7 @@ const STEPS = [
 ];
 
 export default function Home() {
+  const router = useRouter();
   const [poolName, setPoolName] = useState("");
   const [entryFee, setEntryFee] = useState("");
 
@@ -132,6 +134,7 @@ export default function Home() {
                   size="lg"
                   className="w-full"
                   disabled={!poolName || !entryFee}
+                  onClick={() => router.push("/pool/1")}
                 >
                   Create Pool
                   <ArrowRight className="h-4 w-4" />

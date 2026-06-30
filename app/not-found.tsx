@@ -1,10 +1,12 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
 
 export default function NotFound() {
+  const router = useRouter();
   return (
     <div className="flex min-h-dvh flex-col items-center justify-center px-4">
       <motion.div
@@ -28,7 +30,7 @@ export default function NotFound() {
             This pool doesn&apos;t exist — or the link expired.
           </p>
         </div>
-        <Button onClick={() => (window.location.href = "/")}>
+        <Button onClick={() => router.push("/")}>
           <ArrowLeft className="h-4 w-4" />
           Back to Home
         </Button>

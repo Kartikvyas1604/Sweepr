@@ -13,13 +13,12 @@ interface ShareButtonProps {
 function ShareButton({ poolId, className }: ShareButtonProps) {
   const [copied, setCopied] = useState(false);
 
-  const shareLink = `${window.location.origin}/join/${poolId}`;
-
   const handleCopy = useCallback(() => {
-    navigator.clipboard.writeText(shareLink);
+    const link = `${window.location.origin}/join/${poolId}`;
+    navigator.clipboard.writeText(link);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
-  }, [shareLink]);
+  }, [poolId]);
 
   return (
     <button
