@@ -1,36 +1,106 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Sweepr
+
+**Office pool, automated.**
+
+Sweepr brings the tradition of World Cup office pools on-chain. Create a sweepstakes, share a link, and let the smart contract handle the rest — no spreadsheets, no "who has the cash?" group chats.
+
+Built on Solana for instant, low-cost settlements with USDC.
+
+## Features
+
+- **Create Pools** — Set a name, entry fee (USDC), and optional passphrase for private pools
+- **Random Team Assignment** — Each participant gets a randomly assigned World Cup team
+- **Live Leaderboard** — Track standings in real time as matches play out
+- **Auto Settlement** — Smart contract escrow pays the winner automatically
+- **Wallet-First** — Connect with any Solana wallet via wallet-standard
+- **Dashboard** — View your active and past pools, track wins and finishes
+
+## Tech Stack
+
+| Layer | Technology |
+|-------|-----------|
+| Framework | Next.js 16 (App Router) |
+| Language | TypeScript |
+| Styling | Tailwind CSS v4 |
+| Animation | Framer Motion |
+| Fonts | Bricolage Grotesque, Inter, JetBrains Mono |
+| Blockchain | Solana |
+| Wallet | wallet-standard / wallet-adapter |
 
 ## Getting Started
 
-First, run the development server:
+### Prerequisites
+
+- Node.js >= 18
+- npm, pnpm, or bun
+- A Solana wallet (Phantom, Backpack, etc.)
+
+### Installation
+
+```bash
+git clone https://github.com/your-org/sweepr.git
+cd sweepr
+npm install
+```
+
+### Development
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### Build
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+npm run build
+npm start
+```
 
-## Learn More
+## Usage
 
-To learn more about Next.js, take a look at the following resources:
+1. **Create a pool** — Enter a name, set the USDC entry fee, and choose public or private
+2. **Share the link** — Send the pool link to friends; they join and are randomly assigned a team
+3. **Watch the tournament** — Scores update live as World Cup matches are played
+4. **Get paid** — The smart contract automatically settles the pot to the winner's wallet
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Project Structure
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```
+sweepr/
+├── app/                  # Next.js App Router pages
+│   ├── dashboard/        # User dashboard
+│   ├── join/[id]/        # Join a pool
+│   ├── pool/[id]/        # Pool detail & leaderboard
+│   ├── pools/            # Browse public pools
+│   ├── globals.css       # Global styles & design tokens
+│   ├── layout.tsx        # Root layout with wallet provider
+│   └── page.tsx          # Landing page
+├── components/
+│   ├── ui/               # shadcn-style UI primitives
+│   └── wallet-provider.tsx
+├── hooks/                # Custom React hooks
+├── lib/
+│   ├── store.ts          # Client-side state (localStorage)
+│   ├── types.ts          # TypeScript interfaces & constants
+│   └── utils.ts          # Utility functions
+├── public/               # Static assets
+└── package.json
+```
 
-## Deploy on Vercel
+## Roadmap
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+- [ ] Solana program (Anchor) for on-chain escrow & settlement
+- [ ] Oracle integration for live match scores
+- [ ] Multi-tournament support (not just World Cup)
+- [ ] Mobile-first responsive design refinements
+- [ ] Tipping / split-payout modes
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Contributing
+
+See [CONTRIBUTING.md](./CONTRIBUTING.md) for guidelines.
+
+## License
+
+MIT
