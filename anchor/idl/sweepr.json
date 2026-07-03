@@ -1,0 +1,51 @@
+{
+  "address": "SWEEPR_PROGRAM_ID_PLACEHOLDER",
+  "metadata": {
+    "name": "sweepr",
+    "version": "0.1.0",
+    "spec": "0.1.0",
+    "description": "Sweepr — World Cup sweepstakes settlement program"
+  },
+  "instructions": [
+    {
+      "name": "initializePool",
+      "discriminator": [1, 2, 3, 4, 5, 6, 7, 8],
+      "accounts": [
+        { "name": "pool", "writable": true, "pda": { "seeds": [{ "kind": "const", "value": [112, 111, 111, 108] }, { "kind": "arg", "path": "poolId" }] } },
+        { "name": "escrow", "writable": true, "pda": { "seeds": [{ "kind": "const", "value": [101, 115, 99, 114, 111, 119] }, { "kind": "arg", "path": "poolId" }] } },
+        { "name": "payer", "writable": true, "signer": true },
+        { "name": "systemProgram", "address": "11111111111111111111111111111111" }
+      ],
+      "args": [
+        { "name": "poolId", "type": { "array": ["u8", 16] } },
+        { "name": "entryFee", "type": "u64" }
+      ]
+    },
+    {
+      "name": "updateScore",
+      "discriminator": [9, 10, 11, 12, 13, 14, 15, 16],
+      "accounts": [
+        { "name": "pool", "writable": true },
+        { "name": "member", "writable": true },
+        { "name": "oracle", "signer": true }
+      ],
+      "args": [
+        { "name": "points", "type": "u64" },
+        { "name": "nonce", "type": "string" }
+      ]
+    },
+    {
+      "name": "settlePool",
+      "discriminator": [17, 18, 19, 20, 21, 22, 23, 24],
+      "accounts": [
+        { "name": "pool", "writable": true },
+        { "name": "escrow", "writable": true },
+        { "name": "winner", "writable": true },
+        { "name": "oracle", "signer": true },
+        { "name": "protocolFeeWallet", "writable": true },
+        { "name": "tokenProgram", "address": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb" }
+      ],
+      "args": []
+    }
+  ]
+}
