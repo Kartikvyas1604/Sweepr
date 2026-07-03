@@ -6,7 +6,12 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "typecheck": "tsc --noEmit",
+    "supabase:migrate": "supabase migration up",
+    "supabase:start": "supabase start",
+    "supabase:stop": "supabase stop",
+    "inngest:dev": "inngest-cli dev"
   },
   "dependencies": {
     "@coral-xyz/anchor": "^0.30.1",
