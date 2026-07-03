@@ -68,7 +68,7 @@ export async function POST(request: Request) {
         const events = await getFixtureEvents(fixture.id);
         if (events.length === 0) continue;
 
-        const results = processFixtureEvents(events, memberLookups, processedNonces);
+        const results = processFixtureEvents(events, memberLookups, processedNonces, liveFixtures);
 
         for (const result of results) {
           const { error: insertError } = await supabaseAdmin

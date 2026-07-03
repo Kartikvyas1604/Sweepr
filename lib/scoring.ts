@@ -1,4 +1,4 @@
-import type { TxLINEEvent } from "@/types/txline";
+import type { TxLINEEvent, TxLINEFixture } from "@/types/txline";
 
 export const SCORING_RULES = {
   goal: 3,
@@ -28,13 +28,20 @@ export function processFixtureEvents(
   events: TxLINEEvent[],
   poolMembers: PoolMemberLookup[],
   processedNonces: Set<string>,
+  fixtures?: TxLINEFixture[],
 ): ScoringResult[] {
   const results: ScoringResult[] = [];
   const teamToMember = new Map<string, PoolMemberLookup>();
-  const teamIds = new Set(poolMembers.map((m) => m.teamId));
+  const fixtureLookup = new Map<string, TxLINEFixture>();
 
   for (const member of poolMembers) {
     teamToMember.set(member.teamId, member);
+  }
+
+  if (fixtures) {
+    for (const f of fixtures) {
+      fixtureLookup.set(f.id, f);
+    }
   }
 
   for (const event of events) {
@@ -44,10 +51,18 @@ export function processFixtureEvents(
     let targetTeamId: string | null = null;
 
     if (event.type === "own_goal") {
-      for (const tid of teamIds) {
-        if (tid !== event.teamId) {
-          targetTeamId = tid;
-          break;
+      const fixture = fixtureLookup.get(event.fixtureId);
+      if (fixture) {
+        targetTeamId =
+          event.teamId === fixture.homeTeamId
+            ? fixture.awayTeamId
+            : fixture.homeTeamId;
+      } else {
+        for (const tid of teamToMember.keys()) {
+          if (tid !== event.teamId) {
+            targetTeamId = tid;
+            break;
+          }
         }
       }
       if (!targetTeamId) continue;
