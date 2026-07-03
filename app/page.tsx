@@ -6,7 +6,7 @@ import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { createPool } from "@/lib/store";
+import { api } from "@/lib/api-client";
 import {
   ArrowRight,
   Users,
@@ -40,16 +40,15 @@ export default function Home() {
   const [isPrivate, setIsPrivate] = useState(false);
   const [passphrase, setPassphrase] = useState("");
 
-  function handleCreate() {
+  async function handleCreate() {
     const fee = parseFloat(entryFee);
     if (!poolName || !fee || fee <= 0) return;
-    const pool = createPool(
-      poolName,
-      fee,
-      isPrivate,
-      isPrivate ? passphrase || undefined : undefined,
-    );
-    router.push(`/pool/${pool.id}`);
+    try {
+      const result = await api.pools.create(poolName, fee);
+      router.push(`/pool/${result.pool.joinCode}`);
+    } catch {
+      // silently fail — user can retry
+    }
   }
 
   return (

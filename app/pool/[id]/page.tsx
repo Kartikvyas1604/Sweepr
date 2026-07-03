@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -12,55 +12,44 @@ import { Button } from "@/components/ui/button";
 import { GoalOverlay } from "@/components/ui/goal-overlay";
 import { TopNav } from "@/components/ui/top-nav";
 import { ShareButton } from "@/components/ui/share-button";
-import { getPoolWithParticipants } from "@/lib/store";
-import type { Participant, Pool } from "@/lib/types";
-import { Trophy, Goal, Coins, Globe, EyeOff, AlertCircle, Copy, Check } from "lucide-react";
+import { api } from "@/lib/api-client";
+import { Trophy, Goal, AlertCircle, Globe, EyeOff, Copy, Check, Coins, Sparkles } from "lucide-react";
 
 export default function PoolPage() {
   const params = useParams();
   const router = useRouter();
-  const [poolData, setPoolData] = useState<{ pool: Pool; participants: Participant[] } | null>(null);
-  const [lastGoal, setLastGoal] = useState<string | null>(null);
-  const [showGoalOverlay, setShowGoalOverlay] = useState(false);
-  const [lastScorer, setLastScorer] = useState({ name: "", flag: "" });
+  const [poolData, setPoolData] = useState<any>(null);
+  const [leaderboard, setLeaderboard] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [passphraseCopied, setPassphraseCopied] = useState(false);
 
   useEffect(() => {
-    const data = getPoolWithParticipants(params.id as string);
-    if (data.pool) {
-      setPoolData(data as { pool: Pool; participants: Participant[] });
-    }
+    const joinCode = params.id as string;
+    Promise.all([
+      api.pools.get(joinCode),
+      api.pools.leaderboard(joinCode).catch(() => null),
+    ])
+      .then(([poolRes, lbRes]) => {
+        setPoolData(poolRes);
+        setLeaderboard(lbRes?.leaderboard || []);
+      })
+      .catch(() => setError("Pool not found"))
+      .finally(() => setLoading(false));
   }, [params.id]);
 
-  const simulateGoal = useCallback(() => {
-    if (!poolData) return;
-    const { participants } = poolData;
-    if (participants.length === 0) return;
-    const randomIndex = Math.floor(Math.random() * participants.length);
-    const targetId = participants[randomIndex].id;
-    const scorer = participants[randomIndex];
+  if (loading) {
+    return (
+      <div className="relative flex min-h-dvh flex-col">
+        <TopNav title="Pool" showBack backHref="/pools" />
+        <main className="relative z-10 mx-auto flex w-full max-w-4xl flex-1 flex-col items-center justify-center px-4 py-12">
+          <p className="font-mono text-[11px] text-ink-muted/40">Loading pool...</p>
+        </main>
+      </div>
+    );
+  }
 
-    setPoolData((prev) => {
-      if (!prev) return prev;
-      const updated = prev.participants
-        .map((p) =>
-          p.id === targetId ? { ...p, score: p.score + 1 } : p,
-        )
-        .sort((a, b) => b.score - a.score || a.rank - b.rank)
-        .map((p, i) => ({ ...p, rank: i + 1 }));
-      return { ...prev, participants: updated };
-    });
-
-    setLastScorer({ name: scorer.name, flag: scorer.team.flag });
-    setLastGoal(targetId);
-    setShowGoalOverlay(true);
-    setTimeout(() => {
-      setLastGoal(null);
-      setShowGoalOverlay(false);
-    }, 2000);
-  }, [poolData]);
-
-  if (!poolData) {
+  if (error || !poolData) {
     return (
       <div className="relative flex min-h-dvh flex-col">
         <TopNav title="Pool" showBack backHref="/pools" />
@@ -68,7 +57,7 @@ export default function PoolPage() {
           <Card>
             <CardContent className="flex flex-col items-center gap-4 py-12">
               <AlertCircle className="h-8 w-8 text-accent" />
-              <p className="font-display text-sm uppercase tracking-wider text-ink">Pool not found</p>
+              <p className="font-display text-sm uppercase tracking-wider text-ink">{error || "Pool not found"}</p>
               <Button size="sm" onClick={() => router.push("/")}>Create a pool</Button>
             </CardContent>
           </Card>
@@ -77,7 +66,9 @@ export default function PoolPage() {
     );
   }
 
-  const { pool, participants } = poolData;
+  const { pool, memberCount, spotsRemaining, joinUrl } = poolData;
+  const participants = leaderboard;
+  const isPoolFull = spotsRemaining !== undefined && spotsRemaining <= 0;
 
   return (
     <div className="relative flex min-h-dvh flex-col">
@@ -85,7 +76,7 @@ export default function PoolPage() {
         title={pool.name}
         showBack
         backHref="/pools"
-        right={<ShareButton poolId={params.id as string} />}
+        right={<ShareButton poolId={pool.joinCode} />}
       />
 
       <main className="relative z-10 mx-auto flex w-full max-w-4xl flex-1 flex-col gap-4 px-4 py-6 sm:gap-6 sm:py-8">
@@ -102,8 +93,8 @@ export default function PoolPage() {
                 {pool.name}
               </h1>
               <div className="mt-1 flex items-center gap-3">
-                <LiveIndicator />
-                <Badge variant="elevated" size="sm">{participants.length} players</Badge>
+                <LiveIndicator label={pool.status === "open" ? "OPEN" : pool.status === "live" ? "LIVE" : "SETTLED"} />
+                <Badge variant="elevated" size="sm">{memberCount ?? participants.length} players</Badge>
                 {pool.isPrivate ? (
                   <Badge variant="outline" size="sm">
                     <EyeOff className="h-2.5 w-2.5" />
@@ -120,24 +111,12 @@ export default function PoolPage() {
           </div>
 
           <div className="flex items-center gap-3">
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={simulateGoal}
-              disabled={participants.length === 0}
-            >
-              <Goal className="h-3.5 w-3.5" />
-              Sim Goal
-            </Button>
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={() => router.push(`/pool/${params.id}/settle`)}
-              disabled={participants.length === 0}
-            >
-              <Coins className="h-3.5 w-3.5" />
-              Settle
-            </Button>
+            {pool.status === "open" && (
+              <Button variant="primary" size="sm" onClick={() => router.push(`/join/${pool.joinCode}`)}>
+                <Sparkles className="h-3.5 w-3.5" />
+                Join Pool
+              </Button>
+            )}
           </div>
         </motion.div>
 
@@ -148,16 +127,16 @@ export default function PoolPage() {
           transition={{ delay: 0.1, duration: 0.4 }}
         >
           <EscrowStatus
-            totalPot={pool.totalPot}
-            participantCount={participants.length}
-            entryFee={pool.entryFee}
-            status="locked"
+            totalPot={pool.entryFeeUsdc * (memberCount ?? participants.length)}
+            participantCount={memberCount ?? participants.length}
+            entryFee={pool.entryFeeUsdc}
+            status={pool.status === "settled" ? "settled" : pool.status === "live" ? "locked" : "locked"}
             fee={0.025}
           />
         </motion.div>
 
         {/* Passphrase (private pools only) */}
-        {pool.isPrivate && (
+        {pool.isPrivate && pool.passphrase && (
           <motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
@@ -197,6 +176,29 @@ export default function PoolPage() {
           </motion.div>
         )}
 
+        {/* Join URL share card */}
+        {pool.status === "open" && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.15, duration: 0.4 }}
+          >
+            <div className="flex items-center justify-between rounded-lg border border-hairline bg-elevated/20 px-4 py-3">
+              <div className="flex items-center gap-3">
+                <ShareButton poolId={pool.joinCode || (params.id as string)} />
+                <span className="font-mono text-[10px] uppercase tracking-widest text-ink-muted/40">
+                  Share
+                </span>
+              </div>
+              {spotsRemaining !== undefined && (
+                <span className="font-mono text-[10px] text-ink-muted/40">
+                  {spotsRemaining} spot{spotsRemaining !== 1 ? "s" : ""} remaining
+                </span>
+              )}
+            </div>
+          </motion.div>
+        )}
+
         {/* Leaderboard */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -212,7 +214,7 @@ export default function PoolPage() {
                     Leaderboard
                   </span>
                 </div>
-                <LiveIndicator />
+                <LiveIndicator label={pool.status === "settled" ? "SETTLED" : "LIVE"} />
               </div>
               <LeaderboardHeader />
             </CardHeader>
@@ -220,12 +222,14 @@ export default function PoolPage() {
               {participants.length === 0 ? (
                 <div className="flex flex-col items-center gap-2 py-12">
                   <p className="font-body text-sm text-ink-muted/40">No participants yet</p>
-                  <Button size="sm" variant="secondary" onClick={() => router.push(`/join/${params.id}`)}>
-                    Join this pool
-                  </Button>
+                  {pool.status === "open" && (
+                    <Button size="sm" variant="secondary" onClick={() => router.push(`/join/${pool.joinCode || params.id}`)}>
+                      Join this pool
+                    </Button>
+                  )}
                 </div>
               ) : (
-                participants.map((participant, index) => (
+                participants.map((participant: any, index: number) => (
                   <motion.div
                     key={participant.id}
                     initial={{ opacity: 0, x: -20 }}
@@ -233,9 +237,15 @@ export default function PoolPage() {
                     transition={{ delay: 0.3 + index * 0.05, duration: 0.3 }}
                   >
                     <LeaderboardRow
-                      participant={participant}
-                      rank={participant.rank}
-                      highlight={lastGoal === participant.id}
+                      participant={{
+                        id: participant.id,
+                        name: participant.displayName,
+                        walletAddress: participant.walletAddress,
+                        team: { name: participant.assignedTeam?.name || "", flag: participant.assignedTeam?.flag || "", group: participant.assignedTeam?.group || "" },
+                        score: participant.score || 0,
+                        rank: index + 1,
+                      }}
+                      rank={index + 1}
                     />
                   </motion.div>
                 ))
@@ -243,67 +253,7 @@ export default function PoolPage() {
             </CardContent>
           </Card>
         </motion.div>
-
-        {/* Live matches ticker */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.5, duration: 0.4 }}
-        >
-          <Card>
-            <CardHeader>
-              <div className="flex items-center gap-2">
-                <span className="relative flex h-2 w-2">
-                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-accent opacity-60" />
-                  <span className="relative inline-flex h-2 w-2 rounded-full bg-accent" />
-                </span>
-                <span className="font-display text-sm uppercase tracking-wider text-ink">
-                  Live Matches
-                </span>
-              </div>
-            </CardHeader>
-            <CardContent className="flex flex-col gap-2">
-              <div className="flex items-center justify-between rounded-md bg-elevated/30 px-4 py-3">
-                <div className="flex items-center gap-3">
-                  <span className="text-lg">🇧🇷</span>
-                  <span className="font-body text-sm font-medium text-ink">Brazil</span>
-                </div>
-                <div className="flex items-center gap-3">
-                  <span className="font-display text-xl tabular-nums text-ink">2</span>
-                  <span className="font-mono text-[10px] text-ink-muted/40">vs</span>
-                  <span className="font-display text-xl tabular-nums text-ink">1</span>
-                </div>
-                <div className="flex items-center gap-3">
-                  <span className="font-body text-sm font-medium text-ink">Serbia</span>
-                  <span className="text-lg">🇷🇸</span>
-                </div>
-              </div>
-              <div className="flex items-center justify-between rounded-md bg-elevated/30 px-4 py-3">
-                <div className="flex items-center gap-3">
-                  <span className="text-lg">🇦🇷</span>
-                  <span className="font-body text-sm font-medium text-ink">Argentina</span>
-                </div>
-                <div className="flex items-center gap-3">
-                  <span className="font-display text-xl tabular-nums text-ink">0</span>
-                  <span className="font-mono text-[10px] text-ink-muted/40">vs</span>
-                  <span className="font-display text-xl tabular-nums text-ink">0</span>
-                </div>
-                <div className="flex items-center gap-3">
-                  <span className="font-body text-sm font-medium text-ink">Mexico</span>
-                  <span className="text-lg">🇲🇽</span>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </motion.div>
       </main>
-
-      {/* Goal overlay */}
-      <GoalOverlay
-        show={showGoalOverlay}
-        scorerName={lastScorer.name}
-        teamFlag={lastScorer.flag}
-      />
     </div>
   );
 }

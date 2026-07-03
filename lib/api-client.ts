@@ -1,0 +1,101 @@
+const API_BASE = "";
+
+function getToken(): string | null {
+  if (typeof window === "undefined") return null;
+  return localStorage.getItem("sweepr_jwt");
+}
+
+export function setToken(token: string) {
+  localStorage.setItem("sweepr_jwt", token);
+}
+
+export function clearToken() {
+  localStorage.removeItem("sweepr_jwt");
+}
+
+async function request<T>(
+  path: string,
+  options: RequestInit = {},
+): Promise<T> {
+  const token = getToken();
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    ...(options.headers as Record<string, string>),
+  };
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+
+  const res = await fetch(`${API_BASE}${path}`, {
+    ...options,
+    headers,
+  });
+
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({ error: res.statusText }));
+    throw new ApiClientError(res.status, body.code || "API_ERROR", body.error || "Request failed");
+  }
+
+  return res.json();
+}
+
+export class ApiClientError extends Error {
+  constructor(
+    public status: number,
+    public code: string,
+    message: string,
+  ) {
+    super(message);
+  }
+}
+
+export const api = {
+  auth: {
+    requestNonce: (wallet: string) =>
+      request<{ nonce: string; message: string }>("/api/auth/nonce", {
+        method: "POST",
+        body: JSON.stringify({ wallet }),
+      }),
+    verify: (wallet: string, signature: string, nonce: string) =>
+      request<{ token: string; wallet: string; expiresAt: string }>("/api/auth/verify", {
+        method: "POST",
+        body: JSON.stringify({ wallet, signature, nonce }),
+      }),
+  },
+
+  pools: {
+    create: (name: string, entryFeeUsdc: number, maxMembers?: number) =>
+      request<{ pool: any; joinUrl: string }>("/api/pools", {
+        method: "POST",
+        body: JSON.stringify({ name, entryFeeUsdc, maxMembers }),
+      }),
+    get: (joinCode: string) =>
+      request<{ pool: any; leaderboard: any[]; memberCount: number; spotsRemaining: number; joinUrl: string }>(
+        `/api/pools/${joinCode}`,
+      ),
+    join: (joinCode: string, displayName: string, stakeTxSignature?: string) =>
+      request<{ member: any; assignedTeam: any; leaderboard: any[] }>(
+        `/api/pools/${joinCode}/join`,
+        {
+          method: "POST",
+          body: JSON.stringify({ displayName, stakeTxSignature }),
+        },
+      ),
+    leaderboard: (joinCode: string) =>
+      request<{ leaderboard: any[]; recentEvents: any[]; lastUpdated: string; poolStatus: string }>(
+        `/api/pools/${joinCode}/leaderboard`,
+      ),
+  },
+
+  teams: {
+    getAll: (poolId?: string) =>
+      request<{ teams: any[]; assignedTeamIds?: string[] }>(
+        `/api/teams${poolId ? `?poolId=${poolId}` : ""}`,
+      ),
+  },
+
+  fixtures: {
+    get: (liveOnly = false) =>
+      request<{ fixtures: any[] }>(`/api/fixtures${liveOnly ? "?live=true" : ""}`),
+  },
+};

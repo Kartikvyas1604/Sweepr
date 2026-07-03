@@ -7,34 +7,60 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { TeamAssignment } from "@/components/ui/team-assignment";
+import { TeamDraw } from "@/components/ui/team-draw";
 import { LiveIndicator } from "@/components/ui/live-indicator";
-import { useCountdown } from "@/hooks/use-countdown";
-import { getPool, joinPool } from "@/lib/store";
-import type { Team, Pool } from "@/lib/types";
+import { useWallet } from "@/components/wallet-provider";
+import { api } from "@/lib/api-client";
 import { TopNav } from "@/components/ui/top-nav";
-import { Users, DollarSign, Check, EyeOff, Globe, AlertCircle } from "lucide-react";
+import { Users, DollarSign, Check, EyeOff, Globe, AlertCircle, Wallet } from "lucide-react";
+
+type Step = "connect" | "name" | "draw" | "confirm";
 
 export default function JoinPage() {
   const params = useParams();
   const router = useRouter();
-  const [pool, setPool] = useState<Pool | null>(null);
+  const { address, connected, connect, connecting } = useWallet();
+  const [pool, setPool] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [step, setStep] = useState<"passphrase" | "name" | "draw" | "confirm">("name");
+  const [error, setError] = useState<string | null>(null);
+  const [step, setStep] = useState<Step>("connect");
   const [name, setName] = useState("");
-  const [passphraseInput, setPassphraseInput] = useState("");
-  const [passphraseError, setPassphraseError] = useState(false);
-  const [assignedTeam, setAssignedTeam] = useState<Team | null>(null);
-  const countdown = useCountdown(pool?.expiresAt ?? new Date());
+  const [joining, setJoining] = useState(false);
+  const [drawTeams, setDrawTeams] = useState<any[]>([]);
+  const [assignedTeam, setAssignedTeam] = useState<any>(null);
 
   useEffect(() => {
-    const p = getPool(params.id as string);
-    if (p) {
-      setPool(p);
-      setStep(p.isPrivate ? "passphrase" : "name");
-    }
-    setLoading(false);
+    const joinCode = params.id as string;
+    api.pools.get(joinCode)
+      .then((data) => {
+        setPool(data.pool);
+      })
+      .catch(() => {
+        setError("Pool not found");
+      })
+      .finally(() => setLoading(false));
   }, [params.id]);
+
+  useEffect(() => {
+    if (connected && step === "connect") {
+      setStep("name");
+    }
+  }, [connected, step]);
+
+  async function handleJoin() {
+    if (!pool || !name.trim() || !address) return;
+    setJoining(true);
+    try {
+      const joinCode = params.id as string;
+      const result = await api.pools.join(joinCode, name.trim());
+      setAssignedTeam(result.assignedTeam);
+      setStep("confirm");
+    } catch (e: any) {
+      setError(e.message || "Failed to join pool");
+    } finally {
+      setJoining(false);
+    }
+  }
 
   if (loading) {
     return (
@@ -47,7 +73,7 @@ export default function JoinPage() {
     );
   }
 
-  if (!pool) {
+  if (error || !pool) {
     return (
       <div className="relative flex min-h-dvh flex-col">
         <TopNav title="Join Pool" showBack />
@@ -55,31 +81,13 @@ export default function JoinPage() {
           <Card>
             <CardContent className="flex flex-col items-center gap-4 py-12">
               <AlertCircle className="h-8 w-8 text-accent" />
-              <p className="font-display text-sm uppercase tracking-wider text-ink">Pool not found</p>
+              <p className="font-display text-sm uppercase tracking-wider text-ink">{error || "Pool not found"}</p>
               <Button size="sm" onClick={() => router.push("/")}>Create a pool</Button>
             </CardContent>
           </Card>
         </main>
       </div>
     );
-  }
-
-  function handleVerifyPassphrase() {
-    if (!pool) return;
-    if (passphraseInput.trim() === pool.passphrase) {
-      setPassphraseError(false);
-      setStep("name");
-    } else {
-      setPassphraseError(true);
-    }
-  }
-
-  function handleJoin() {
-    const participant = joinPool(params.id as string, name.trim(), `0x${Math.random().toString(36).slice(2, 10)}`);
-    if (participant) {
-      setAssignedTeam(participant.team);
-      setStep("draw");
-    }
   }
 
   return (
@@ -89,9 +97,9 @@ export default function JoinPage() {
       <main className="relative z-10 flex flex-1 items-center justify-center px-4 py-12">
         <div className="w-full max-w-md">
           <AnimatePresence mode="wait">
-            {step === "passphrase" && (
+            {step === "connect" && (
               <motion.div
-                key="passphrase"
+                key="connect"
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -20 }}
@@ -104,29 +112,22 @@ export default function JoinPage() {
                           {pool.name}
                         </p>
                         <p className="mt-1 flex items-center gap-1.5 font-mono text-[10px] text-ink-muted/40">
-                          <EyeOff className="h-3 w-3 text-accent" />
-                          Private pool — passphrase required
+                          <Wallet className="h-3 w-3 text-accent" />
+                          Connect wallet to join
                         </p>
                       </div>
+                      <LiveIndicator label="OPEN" />
                     </div>
                   </CardHeader>
                   <CardContent className="flex flex-col gap-6">
-                    <Input
-                      id="passphrase"
-                      label="Passphrase"
-                      placeholder="Enter the pool passphrase"
-                      value={passphraseInput}
-                      onChange={(e) => { setPassphraseInput(e.target.value); setPassphraseError(false); }}
-                      error={passphraseError ? "Incorrect passphrase" : undefined}
-                    />
                     <Button
                       size="lg"
                       className="w-full"
-                      disabled={!passphraseInput.trim()}
-                      onClick={handleVerifyPassphrase}
+                      disabled={connecting}
+                      onClick={connect}
                     >
-                      <EyeOff className="h-4 w-4" />
-                      Verify & Join
+                      <Wallet className="h-4 w-4" />
+                      {connecting ? "Connecting..." : "Connect Wallet"}
                     </Button>
                   </CardContent>
                 </Card>
@@ -163,7 +164,7 @@ export default function JoinPage() {
                       <div className="flex flex-col items-center gap-1 rounded-md bg-elevated/30 px-3 py-3">
                         <DollarSign className="h-4 w-4 text-money" />
                         <span className="font-mono text-sm font-medium text-ink">
-                          {pool.entryFee}
+                          {pool.entryFeeUsdc}
                         </span>
                         <span className="font-mono text-[9px] uppercase tracking-widest text-ink-muted/40">
                           Buy-in
@@ -172,22 +173,18 @@ export default function JoinPage() {
                       <div className="flex flex-col items-center gap-1 rounded-md bg-elevated/30 px-3 py-3">
                         <Users className="h-4 w-4 text-ink-muted" />
                         <span className="font-mono text-sm font-medium text-ink">
-                          {pool.participantCount}
+                          {pool.memberCount ?? 0}
                         </span>
                         <span className="font-mono text-[9px] uppercase tracking-widest text-ink-muted/40">
                           In
                         </span>
                       </div>
                       <div className="flex flex-col items-center gap-1 rounded-md bg-elevated/30 px-3 py-3">
-                        <span className="font-mono text-[11px] font-medium tracking-wider text-money">
-                          {countdown.days}d
+                        <span className="font-mono text-sm font-medium text-ink">
+                          {pool.spotsRemaining}
                         </span>
-                        <div className="flex gap-1 font-mono text-[11px] font-medium text-money">
-                          <span>{String(countdown.hours).padStart(2, "0")}h</span>
-                          <span>{String(countdown.minutes).padStart(2, "0")}m</span>
-                        </div>
                         <span className="font-mono text-[9px] uppercase tracking-widest text-ink-muted/40">
-                          Left
+                          Spots
                         </span>
                       </div>
                     </div>
@@ -195,7 +192,7 @@ export default function JoinPage() {
                     <Input
                       id="name"
                       label="Your Name"
-                      placeholder="Enter your name"
+                      placeholder="Enter your display name"
                       value={name}
                       onChange={(e) => setName(e.target.value)}
                     />
@@ -203,22 +200,30 @@ export default function JoinPage() {
                     <Button
                       size="lg"
                       className="w-full"
-                      disabled={!name.trim()}
+                      disabled={!name.trim() || joining}
                       onClick={handleJoin}
                     >
-                      <Users className="h-4 w-4" />
-                      Join Pool — {pool.entryFee} USDC
+                      {joining ? (
+                        <>Joining...</>
+                      ) : (
+                        <>
+                          <Users className="h-4 w-4" />
+                          Draw My Team
+                        </>
+                      )}
                     </Button>
 
-                    <p className="text-center font-mono text-[10px] uppercase tracking-widest text-ink-muted/30">
-                      Entry fee held in escrow. Refunded if no matches play.
-                    </p>
+                    {pool.entryFeeUsdc > 0 && (
+                      <p className="text-center font-mono text-[10px] uppercase tracking-widest text-ink-muted/30">
+                        Entry fee held in escrow. Refunded if no matches play.
+                      </p>
+                    )}
                   </CardContent>
                 </Card>
               </motion.div>
             )}
 
-            {step === "draw" && (
+            {step === "draw" && assignedTeam && (
               <motion.div
                 key="draw"
                 initial={{ opacity: 0, scale: 0.95 }}
@@ -236,13 +241,12 @@ export default function JoinPage() {
                       </Badge>
                     </div>
                   </CardHeader>
-                  <CardContent>
-                    <TeamAssignment
+                  <CardContent className="py-8">
+                    <TeamDraw
                       participantName={name}
-                      onAssigned={(team) => {
-                        setAssignedTeam(team);
-                        setTimeout(() => setStep("confirm"), 2000);
-                      }}
+                      drawTeams={drawTeams}
+                      assignedTeam={assignedTeam}
+                      onRevealComplete={() => setStep("confirm")}
                     />
                   </CardContent>
                 </Card>
@@ -272,7 +276,7 @@ export default function JoinPage() {
                       animate={{ scale: 1 }}
                       transition={{ type: "spring", stiffness: 200, damping: 12 }}
                     >
-                      <span className="text-4xl">{assignedTeam.flag}</span>
+                      <span className="text-4xl">{assignedTeam.flagUrl || "🏆"}</span>
                     </motion.div>
                     <div className="text-center">
                       <p className="font-display text-2xl uppercase tracking-wider text-money">
@@ -281,6 +285,11 @@ export default function JoinPage() {
                       <p className="mt-1 font-body text-sm text-ink-muted">
                         You&apos;re cheering for {assignedTeam.name} this Cup.
                       </p>
+                      {assignedTeam.group && (
+                        <p className="mt-0.5 font-mono text-[10px] uppercase tracking-widest text-ink-muted/40">
+                          Group {assignedTeam.group}
+                        </p>
+                      )}
                     </div>
                     <Button
                       size="lg"
