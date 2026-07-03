@@ -89,3 +89,16 @@ CREATE POLICY "members_insert_service" ON pool_members FOR INSERT WITH CHECK (tr
 
 -- score_events: public read, service role only writes
 CREATE POLICY "events_select_public" ON score_events FOR SELECT USING (true);
+
+-- RPC: increment member score atomically
+CREATE OR REPLACE FUNCTION increment_score(p_member_id UUID, p_points INT)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+  UPDATE pool_members
+  SET score = score + p_points
+  WHERE id = p_member_id;
+END;
+$$;

@@ -1,14 +1,13 @@
-import { Connection, PublicKey, Keypair, VersionedTransaction } from "@solana/web3.js";
+import { Connection, PublicKey, Keypair } from "@solana/web3.js";
 import { Program, AnchorProvider, Idl } from "@coral-xyz/anchor";
 import bs58 from "bs58";
 import { env } from "./env";
 import { logger } from "./logger";
 import { ApiError } from "./errors";
-import type { Sweepr } from "@/anchor/idl/sweepr";
 
 let connection: Connection | null = null;
 let oracleKeypair: Keypair | null = null;
-let program: Program<Sweepr> | null = null;
+let program: Program | null = null;
 
 export function getConnection(): Connection {
   if (!connection) {
@@ -25,25 +24,26 @@ export function getOracleKeypair(): Keypair {
   return oracleKeypair;
 }
 
-export function getProgram(): Program<Sweepr> {
+export function getProgram(): Program {
   if (!program) {
     const conn = getConnection();
+    const keypair = getOracleKeypair();
     const wallet = {
-      publicKey: getOracleKeypair().publicKey,
+      publicKey: keypair.publicKey,
       signTransaction: async (tx: any) => {
-        tx.sign([getOracleKeypair()]);
+        tx.sign([keypair]);
         return tx;
       },
       signAllTransactions: async (txs: any[]) => {
-        for (const tx of txs) tx.sign([getOracleKeypair()]);
+        for (const tx of txs) tx.sign([keypair]);
         return txs;
       },
     };
     const provider = new AnchorProvider(conn, wallet, {
       commitment: "confirmed",
     });
-    const idl = require("@/anchor/idl/sweepr.json") as Sweepr;
-    program = new Program(idl, provider) as unknown as Program<Sweepr>;
+    const idl = require("@/anchor/idl/sweepr.json") as Idl;
+    program = new Program(idl, provider);
   }
   return program;
 }
@@ -99,23 +99,22 @@ export async function verifyUsdcTransfer(
     const fromPubkey = new PublicKey(expectedFrom);
     const toPubkey = new PublicKey(expectedTo);
 
-    for (const ix of tx.transaction.message.compiledInstructions) {
-      const accounts = ix.accountKeys.map((idx: number) =>
-        tx.transaction.message.staticAccountKeys[idx].toString(),
-      );
+    const message = tx.transaction.message;
+    const accountKeys = message.staticAccountKeys.map((k: PublicKey) => k.toString());
 
-      if (accounts.includes(fromPubkey.toString()) && accounts.includes(toPubkey.toString())) {
-        const postBalances = tx.meta?.postBalances ?? [];
-        const preBalances = tx.meta?.preBalances ?? [];
-        const fromIndex = tx.transaction.message.staticAccountKeys.findIndex(
-          (k: PublicKey) => k.equals(fromPubkey),
-        );
-        const toIndex = tx.transaction.message.staticAccountKeys.findIndex(
-          (k: PublicKey) => k.equals(toPubkey),
-        );
-        if (fromIndex === -1 || toIndex === -1) continue;
+    for (const ix of message.compiledInstructions) {
+      const ixAccounts = ix.accountKeyIndexes.map(
+        (idx: number) => accountKeys[idx],
+      ) as string[];
 
-        const solDiff = (postBalances[toIndex] - preBalances[toIndex]);
+      const fromBalance = tx.meta?.preBalances?.[ix.accountKeyIndexes[0] as number] ?? 0;
+      const toBalance = tx.meta?.postBalances?.[ix.accountKeyIndexes[1] as number] ?? 0;
+
+      if (
+        ixAccounts.includes(fromPubkey.toString()) &&
+        ixAccounts.includes(toPubkey.toString())
+      ) {
+        const solDiff = toBalance - fromBalance;
         if (solDiff === expectedAmount * 1_000_000) {
           return true;
         }
@@ -143,13 +142,13 @@ export async function callUpdateScore(
     const [poolPda] = derivePoolPDA(poolId);
     const [memberPda] = deriveMemberPDA(poolId, memberWallet);
 
-    const sig = await prog.methods
+    const sig = await (prog.methods as any)
       .updateScore(points, eventNonce)
       .accounts({
         pool: poolPda,
         member: memberPda,
         oracle: getOracleKeypair().publicKey,
-      } as any)
+      })
       .rpc();
 
     return sig;
@@ -173,7 +172,7 @@ export async function callSettlePool(
     const [poolPda] = derivePoolPDA(poolId);
     const [escrowPda] = deriveEscrowPDA(poolId);
 
-    const sig = await prog.methods
+    const sig = await (prog.methods as any)
       .settlePool()
       .accounts({
         pool: poolPda,
@@ -181,7 +180,7 @@ export async function callSettlePool(
         winner: new PublicKey(winnerWallet),
         oracle: getOracleKeypair().publicKey,
         protocolFeeWallet: new PublicKey(env.PROTOCOL_FEE_WALLET),
-      } as any)
+      })
       .rpc();
 
     return sig;

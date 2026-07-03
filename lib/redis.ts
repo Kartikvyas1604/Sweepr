@@ -55,7 +55,7 @@ export async function publishPoolUpdate(
   payload: PoolUpdateEvent,
 ): Promise<void> {
   try {
-    await redis.xadd(
+    await (redis as any).xadd(
       `stream:pool:${poolId}`,
       "*",
       { type: payload.type, data: JSON.stringify(payload) },
@@ -79,21 +79,26 @@ export async function readPoolUpdates(
   lastId: string,
 ): Promise<Array<{ id: string; type: string; data: Record<string, unknown> }>> {
   try {
-    const response = await redis.xread("STREAMS", `stream:pool:${poolId}`, lastId, {
-      COUNT: 100,
-    });
+    const response = await (redis as any).xread(
+      "STREAMS",
+      `stream:pool:${poolId}`,
+      lastId,
+      { COUNT: 100 },
+    );
+
     if (!response || response.length === 0) return [];
 
     const messages: Array<{ id: string; type: string; data: Record<string, unknown> }> = [];
-    for (const [, entries] of response) {
-      for (const [id, fields] of entries) {
+    for (const entry of response) {
+      const streamEntries = entry[1] as Array<[string, Record<string, string>]>;
+      for (const [id, fields] of streamEntries) {
         const parsed = PoolUpdateEventDataSchema.safeParse(fields);
         if (!parsed.success) continue;
         try {
           messages.push({
             id,
             type: parsed.data.type,
-            data: JSON.parse(parsed.data.data),
+            data: JSON.parse(parsed.data.data) as Record<string, unknown>,
           });
         } catch {
           continue;

@@ -1,106 +1,153 @@
-# Sweepr
+# Sweepr — World Cup Sweepstakes, Automated
 
-**Office pool, automated.**
-
-Sweepr brings the tradition of World Cup office pools on-chain. Create a sweepstakes, share a link, and let the smart contract handle the rest — no spreadsheets, no "who has the cash?" group chats.
-
-Built on Solana for instant, low-cost settlements with USDC.
-
-## Features
-
-- **Create Pools** — Set a name, entry fee (USDC), and optional passphrase for private pools
-- **Random Team Assignment** — Each participant gets a randomly assigned World Cup team
-- **Live Leaderboard** — Track standings in real time as matches play out
-- **Auto Settlement** — Smart contract escrow pays the winner automatically
-- **Wallet-First** — Connect with any Solana wallet via wallet-standard
-- **Dashboard** — View your active and past pools, track wins and finishes
+Create a World Cup sweepstakes pool, share a link, and let the smart contract settle the payout. No trust. No spreadsheets. Just vibes.
 
 ## Tech Stack
 
-| Layer | Technology |
-|-------|-----------|
-| Framework | Next.js 16 (App Router) |
-| Language | TypeScript |
-| Styling | Tailwind CSS v4 |
-| Animation | Framer Motion |
-| Fonts | Bricolage Grotesque, Inter, JetBrains Mono |
-| Blockchain | Solana |
-| Wallet | wallet-standard / wallet-adapter |
+| Layer | Choice |
+|---|---|
+| Framework | Next.js 16 App Router |
+| Database | Supabase (Postgres + RLS) |
+| Cache / Pub-Sub | Upstash Redis |
+| Auth | Solana wallet signature → JWT (jose) |
+| Real-time | Server-Sent Events (SSE) |
+| Jobs | Inngest (cron + scheduled) |
+| Validation | Zod (every input, env var, API response) |
+| Solana | @solana/web3.js + Anchor |
 
-## Getting Started
+## Local Development
 
 ### Prerequisites
 
-- Node.js >= 18
-- npm, pnpm, or bun
-- A Solana wallet (Phantom, Backpack, etc.)
+- Node.js 20+
+- Supabase CLI (`brew install supabase/tap/supabase`)
+- Upstash account (free tier)
+- Inngest account (free tier)
+- TxLINE API key
 
-### Installation
+### Setup
 
 ```bash
-git clone https://github.com/your-org/sweepr.git
-cd sweepr
+# 1. Install dependencies
 npm install
-```
 
-### Development
+# 2. Copy env vars
+cp .env.example .env.local
+# Edit .env.local with your Supabase, Upstash, TxLINE, Solana, and Inngest credentials
 
-```bash
+# 3. Start Supabase locally
+supabase start
+npx supabase migration up
+
+# 4. Start Inngest dev server (separate terminal)
+npx inngest-cli dev
+
+# 5. Start Next.js dev server
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) in your browser.
+### Environment Variables
 
-### Build
+See `.env.example` for all required vars. The app will throw a clear error at startup if any are missing.
+
+## API Routes
+
+| Method | Route | Auth | Description |
+|---|---|---|---|
+| POST | `/api/auth/nonce` | No | Request sign-in nonce |
+| POST | `/api/auth/verify` | No | Verify wallet signature, get JWT |
+| POST | `/api/pools` | JWT | Create a pool |
+| GET | `/api/pools/[joinCode]` | No | Get pool details + leaderboard |
+| POST | `/api/pools/[joinCode]/join` | JWT | Join a pool |
+| GET | `/api/pools/[joinCode]/leaderboard` | No | Get leaderboard + recent events |
+| GET | `/api/stream/[poolId]` | No | SSE real-time updates |
+| GET | `/api/teams` | No | All 32 World Cup teams |
+| GET | `/api/fixtures` | No | Fixtures (use `?live=true`) |
+| POST | `/api/internal/score-sync` | Inngest | Process live goals (cron) |
+| POST | `/api/internal/settle` | Inngest | Settle all active pools |
+| GET/POST | `/api/inngest` | Inngest | Inngest serve handler |
+
+## Production Deployment (Vercel)
+
+### Pre-deployment Checklist
+
+1. **Supabase**: Run migration against production database
+   ```bash
+   npx supabase db push
+   ```
+
+2. **Upstash**: Create Redis database, note REST URL + token
+
+3. **Solana**: Deploy Anchor program to mainnet
+   ```bash
+   anchor deploy --provider.cluster mainnet
+   ```
+   Copy the program ID to `SWEEPR_PROGRAM_ID`
+
+4. **Oracle Keypair**: Generate and fund
+   ```bash
+   solana-keygen grind --starts-with oracle:1
+   solana airdrop 1 oracle-keypair.json --url mainnet-beta
+   ```
+   Base58 encode: use `bs58` to encode the secret key bytes
+
+5. **TxLINE**: Obtain API key from TxLINE
+
+6. **Inngest**: Create app in Inngest dashboard, copy signing key + event key
+
+### Deploy
 
 ```bash
-npm run build
-npm start
+# Set all env vars in Vercel project dashboard
+vercel --prod
+# Or: set in Vercel Project Settings → Environment Variables
 ```
 
-## Usage
+### Post-deployment
 
-1. **Create a pool** — Enter a name, set the USDC entry fee, and choose public or private
-2. **Share the link** — Send the pool link to friends; they join and are randomly assigned a team
-3. **Watch the tournament** — Scores update live as World Cup matches are played
-4. **Get paid** — The smart contract automatically settles the pot to the winner's wallet
+1. Verify `/api/pools` returns 401 without auth
+2. Verify `/api/fixtures` returns real World Cup data
+3. Check Inngest dashboard shows cron function active
+4. Test full flow: create pool → join → verify SSE stream
 
-## Project Structure
+## Triggering Tournament Settlement Manually
 
-```
-sweepr/
-├── app/                  # Next.js App Router pages
-│   ├── dashboard/        # User dashboard
-│   ├── join/[id]/        # Join a pool
-│   ├── pool/[id]/        # Pool detail & leaderboard
-│   ├── pools/            # Browse public pools
-│   ├── globals.css       # Global styles & design tokens
-│   ├── layout.tsx        # Root layout with wallet provider
-│   └── page.tsx          # Landing page
-├── components/
-│   ├── ui/               # shadcn-style UI primitives
-│   └── wallet-provider.tsx
-├── hooks/                # Custom React hooks
-├── lib/
-│   ├── store.ts          # Client-side state (localStorage)
-│   ├── types.ts          # TypeScript interfaces & constants
-│   └── utils.ts          # Utility functions
-├── public/               # Static assets
-└── package.json
+```bash
+curl -X POST https://sweepr.xyz/api/internal/settle \
+  -H "x-inngest-key: $INNGEST_EVENT_KEY"
 ```
 
-## Roadmap
+Or send the Inngest event from the dashboard:
+```
+Event: sweepr/tournament.end
+Data: {}
+```
 
-- [ ] Solana program (Anchor) for on-chain escrow & settlement
-- [ ] Oracle integration for live match scores
-- [ ] Multi-tournament support (not just World Cup)
-- [ ] Mobile-first responsive design refinements
-- [ ] Tipping / split-payout modes
+## Rotating the Oracle Keypair
 
-## Contributing
+1. Generate new keypair
+2. Fund it with SOL
+3. Update `SETTLEMENT_KEYPAIR` and `ORACLE_PUBKEY` in env
+4. Redeploy
 
-See [CONTRIBUTING.md](./CONTRIBUTING.md) for guidelines.
+## Monitoring
 
-## License
+| What to watch | Where |
+|---|---|
+| API errors | Vercel Logs → JSON structured logs |
+| Score sync failures | Inngest Dashboard → Runs |
+| Redis cache misses | Upstash Console → Metrics |
+| Supabase slow queries | Supabase Dashboard → Query Performance |
+| On-chain settlement failures | Solana Explorer → Program ID |
 
-MIT
+## Architecture
+
+```
+Client → Next.js API Routes → Supabase (pools, members, scores)
+                            → Upstash Redis (cache, rate limits, pub-sub)
+                            → TxLINE (live match data)
+                            → Solana (escrow, settlement)
+                            → Inngest (cron scoring)
+                                  ↓
+                            SSE stream → connected clients
+```

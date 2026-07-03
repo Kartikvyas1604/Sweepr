@@ -144,10 +144,12 @@ export async function POST(request: Request) {
             },
           );
 
-          await supabaseAdmin
-            .from("processed_nonces")
-            .insert({ nonce: result.eventId, pool_id: pool.id })
-            .catch(() => {});
+          try {
+            await supabaseAdmin
+              .from("processed_nonces")
+              .insert({ nonce: result.eventId, pool_id: pool.id });
+          } catch {
+          }
 
           totalEventsProcessed++;
           totalNewGoals++;

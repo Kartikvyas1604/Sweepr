@@ -5,25 +5,42 @@ export interface Database {
         Row: PoolRow;
         Insert: PoolInsert;
         Update: PoolUpdate;
+        Relationships: [];
       };
       pool_members: {
         Row: PoolMemberRow;
         Insert: PoolMemberInsert;
         Update: PoolMemberUpdate;
+        Relationships: [];
       };
       score_events: {
         Row: ScoreEventRow;
         Insert: ScoreEventInsert;
+        Update: never;
+        Relationships: [];
       };
       processed_nonces: {
         Row: ProcessedNonceRow;
         Insert: ProcessedNonceInsert;
+        Update: never;
+        Relationships: [];
+      };
+    };
+    Views: Record<string, never>;
+    Functions: {
+      increment_score: {
+        Args: {
+          p_member_id: string;
+          p_points: number;
+        };
+        Returns: void;
       };
     };
     Enums: {
       pool_status: "waiting" | "active" | "settled";
       event_type: "goal" | "own_goal" | "penalty";
     };
+    CompositeTypes: Record<string, never>;
   };
 }
 
