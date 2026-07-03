@@ -5,7 +5,7 @@ import { ApiError } from "@/lib/errors";
 import { requireAuth } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase";
 import { generateJoinCode } from "@/lib/pools";
-import { deriveEscrowPDA } from "@/lib/solana";
+import { deriveEscrowPDA, callInitializePool } from "@/lib/solana";
 import { publishPoolUpdate } from "@/lib/redis";
 import { env } from "@/lib/env";
 import { logger } from "@/lib/logger";
@@ -34,10 +34,10 @@ export async function POST(request: Request) {
     }
 
     const joinCode = await generateJoinCode();
+    const poolId = crypto.randomUUID();
 
     let escrowPda: string | null = null;
     if (entryFeeUsdc > 0) {
-      const poolId = crypto.randomUUID();
       const [pda] = deriveEscrowPDA(poolId);
       escrowPda = pda.toString();
     }
@@ -45,6 +45,7 @@ export async function POST(request: Request) {
     const { data: pool, error } = await supabaseAdmin
       .from("pools")
       .insert({
+        id: poolId,
         name,
         created_by: wallet,
         join_code: joinCode,
@@ -58,6 +59,15 @@ export async function POST(request: Request) {
     if (error || !pool) {
       logger.error("Failed to create pool", { error, wallet });
       throw new ApiError(500, "POOL_CREATE_FAILED", "Failed to create pool");
+    }
+
+    if (entryFeeUsdc > 0) {
+      callInitializePool(poolId, entryFeeUsdc).catch((e) => {
+        logger.warn("On-chain pool init failed (non-blocking)", {
+          poolId,
+          error: String(e),
+        });
+      });
     }
 
     await publishPoolUpdate(pool.id, {

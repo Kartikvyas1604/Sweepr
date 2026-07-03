@@ -193,3 +193,35 @@ export async function callSettlePool(
     throw new ApiError(500, "SETTLE_FAILED", "Failed to settle pool on-chain");
   }
 }
+
+export async function callInitializePool(
+  poolId: string,
+  entryFee: number,
+): Promise<string> {
+  try {
+    const prog = getProgram();
+    const [poolPda] = derivePoolPDA(poolId);
+    const [escrowPda] = deriveEscrowPDA(poolId);
+
+    const sig = await (prog.methods as any)
+      .initializePool(
+        Array.from(uuidToBytes(poolId)),
+        entryFee * 1_000_000,
+      )
+      .accounts({
+        pool: poolPda,
+        escrow: escrowPda,
+        payer: getOracleKeypair().publicKey,
+      })
+      .rpc();
+
+    return sig;
+  } catch (e) {
+    logger.error("callInitializePool failed", {
+      poolId,
+      entryFee,
+      error: String(e),
+    });
+    throw new ApiError(500, "INIT_POOL_FAILED", "Failed to initialize pool on-chain");
+  }
+}
