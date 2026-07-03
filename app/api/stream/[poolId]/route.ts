@@ -18,7 +18,6 @@ export async function GET(
     const encoder = new TextEncoder();
     let streamId = "0";
     let closed = false;
-    let heartbeatCount = 0;
 
     const stream = new ReadableStream({
       async start(controller) {
@@ -49,16 +48,13 @@ export async function GET(
               logger.warn("SSE poll error", { poolId, error: String(e) });
             }
 
-            heartbeatCount++;
-            if (heartbeatCount % 50 === 0) {
-              controller.enqueue(
-                encoder.encode(
-                  `event: heartbeat\ndata: ${JSON.stringify({ t: Date.now() })}\n\n`,
-                ),
-              );
-            }
+            controller.enqueue(
+              encoder.encode(
+                `event: heartbeat\ndata: ${JSON.stringify({ t: Date.now() })}\n\n`,
+              ),
+            );
 
-            await new Promise((r) => setTimeout(r, 500));
+            await new Promise((r) => setTimeout(r, 3000));
           }
         };
 
