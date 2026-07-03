@@ -44,14 +44,8 @@ export function handleRouteError(error: unknown, request?: Request): Response {
       request,
     );
   }
-  const message =
-    process.env.NODE_ENV === "production"
-      ? "Something went wrong"
-      : error instanceof Error
-        ? error.message
-        : String(error);
   logger.error("Unhandled route error", {
     error: error instanceof Error ? error.message : String(error),
   });
-  return apiError(500, "INTERNAL_ERROR", message, request);
+  return apiError(500, "INTERNAL_ERROR", "Something went wrong", request);
 }
