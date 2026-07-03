@@ -39,7 +39,7 @@ export async function POST(request: Request) {
     for (const pool of activePools) {
       const { data: members } = await supabaseAdmin
         .from("pool_members")
-        .select("id, team_id, display_name, team_name, team_flag_url")
+        .select("id, wallet, team_id, display_name, team_name, team_flag_url")
         .eq("pool_id", pool.id);
 
       if (!members || members.length === 0) continue;
@@ -47,6 +47,7 @@ export async function POST(request: Request) {
       const memberLookups = members.map((m) => ({
         teamId: m.team_id,
         memberId: m.id,
+        wallet: m.wallet,
         poolId: pool.id,
       }));
 
@@ -134,7 +135,7 @@ export async function POST(request: Request) {
             },
           });
 
-          callUpdateScore(pool.id, result.memberId, result.points, result.eventId).catch(
+          callUpdateScore(pool.id, result.wallet, result.points, result.eventId).catch(
             (e: Error) => {
               logger.warn("On-chain score update failed (non-blocking)", {
                 poolId: pool.id,

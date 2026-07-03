@@ -8,6 +8,7 @@ export const SCORING_RULES = {
 
 export interface ScoringResult {
   memberId: string;
+  wallet: string;
   poolId: string;
   teamId: string;
   fixtureId: string;
@@ -21,6 +22,7 @@ export interface ScoringResult {
 interface PoolMemberLookup {
   teamId: string;
   memberId: string;
+  wallet: string;
   poolId: string;
 }
 
@@ -76,6 +78,7 @@ export function processFixtureEvents(
     const points = SCORING_RULES[event.type];
     results.push({
       memberId: member.memberId,
+      wallet: member.wallet,
       poolId: member.poolId,
       teamId: targetTeamId,
       fixtureId: event.fixtureId,
