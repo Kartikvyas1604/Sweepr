@@ -1,0 +1,22 @@
+[toolchain]
+anchor_version = "0.30.1"
+
+[features]
+seeds = true
+skip-lint = false
+
+[programs.localnet]
+sweepr = "G37kRZoauAGXhQLDmEFmhUfRBY7HHMHUq3AQUP6Mz5GP"
+
+[programs.devnet]
+sweepr = "G37kRZoauAGXhQLDmEFmhUfRBY7HHMHUq3AQUP6Mz5GP"
+
+[programs.mainnet]
+sweepr = "G37kRZoauAGXhQLDmEFmhUfRBY7HHMHUq3AQUP6Mz5GP"
+
+[provider]
+cluster = "localnet"
+wallet = "~/.config/solana/id.json"
+
+[scripts]
+test = "ts-mocha -p tsconfig.json tests/**/*.ts --timeout 60000"

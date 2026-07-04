@@ -1,0 +1,23 @@
+{
+  "name": "sweepr-anchor",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "test": "anchor test",
+    "localnet": "anchor localnet",
+    "deploy": "ts-node migrations/deploy.ts",
+    "build": "anchor build"
+  },
+  "dependencies": {
+    "@coral-xyz/anchor": "^0.30.1",
+    "@solana/spl-token": "^0.4.9",
+    "@solana/web3.js": "^1.98.0"
+  },
+  "devDependencies": {
+    "chai": "^4.3.4",
+    "mocha": "^9.2.2",
+    "ts-mocha": "^10.0.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.0.0"
+  }
+}
