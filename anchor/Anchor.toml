@@ -6,13 +6,13 @@ seeds = true
 skip-lint = false
 
 [programs.localnet]
-sweepr = "G37kRZoauAGXhQLDmEFmhUfRBY7HHMHUq3AQUP6Mz5GP"
+sweepr = "6bvmJVnmogfwcVTrU9y6MaM9G8vYRQBXeHbiZw5BU2sC"
 
 [programs.devnet]
-sweepr = "G37kRZoauAGXhQLDmEFmhUfRBY7HHMHUq3AQUP6Mz5GP"
+sweepr = "6bvmJVnmogfwcVTrU9y6MaM9G8vYRQBXeHbiZw5BU2sC"
 
 [programs.mainnet]
-sweepr = "G37kRZoauAGXhQLDmEFmhUfRBY7HHMHUq3AQUP6Mz5GP"
+sweepr = "6bvmJVnmogfwcVTrU9y6MaM9G8vYRQBXeHbiZw5BU2sC"
 
 [provider]
 cluster = "localnet"

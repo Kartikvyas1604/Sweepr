@@ -12,7 +12,7 @@ use constants::*;
 use errors::SweeprError;
 use state::*;
 
-declare_id!("G37kRZoauAGXhQLDmEFmhUfRBY7HHMHUq3AQUP6Mz5GP");
+declare_id!("6bvmJVnmogfwcVTrU9y6MaM9G8vYRQBXeHbiZw5BU2sC");
 
 #[program]
 pub mod sweepr {
