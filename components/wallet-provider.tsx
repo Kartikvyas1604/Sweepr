@@ -20,6 +20,7 @@ interface WalletContextValue {
   connect: () => Promise<void>;
   disconnect: () => void;
   ensureAuth: () => Promise<void>;
+  getProvider: () => Promise<any>;
 }
 
 const WalletContext = createContext<WalletContextValue>({
@@ -29,6 +30,7 @@ const WalletContext = createContext<WalletContextValue>({
   connect: async () => {},
   disconnect: () => {},
   ensureAuth: async () => {},
+  getProvider: async () => null,
 });
 
 function getStoredWallet(): string | null {
@@ -175,6 +177,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
           connect,
           disconnect,
           ensureAuth,
+          getProvider: getWalletProvider,
         }}
       >
         {children}

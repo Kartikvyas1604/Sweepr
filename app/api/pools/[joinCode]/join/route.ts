@@ -4,13 +4,15 @@ import { handleRouteError, ApiError } from "@/lib/errors";
 import { requireAuth } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase";
 import { assignTeam, computeLeaderboard } from "@/lib/pools";
-import { verifyUsdcTransfer } from "@/lib/solana";
-import { publishPoolUpdate } from "@/lib/redis";
+import { verifyUsdcTransfer, verifyJoinPoolTx } from "@/lib/solana";
+import { getAllTeams } from "@/lib/txline";
+import { redis, publishPoolUpdate } from "@/lib/redis";
 import { logger } from "@/lib/logger";
 
 const bodySchema = z.object({
   displayName: z.string().min(1).max(40),
   stakeTxSignature: z.string().optional(),
+  tempToken: z.string().optional(),
 });
 
 export async function POST(
@@ -29,7 +31,7 @@ export async function POST(
       return handleRouteError(parsed.error);
     }
 
-    const { displayName, stakeTxSignature } = parsed.data;
+    const { displayName, stakeTxSignature, tempToken } = parsed.data;
 
     const { data: pool, error: poolError } = await supabaseAdmin
       .from("pools")
@@ -65,6 +67,22 @@ export async function POST(
       throw new ApiError(409, "ALREADY_JOINED", "You have already joined this pool");
     }
 
+    let assignedTeam: Awaited<ReturnType<typeof assignTeam>> | null = null;
+    let resolvedTeamId: string | null = null;
+
+    if (tempToken) {
+      const raw = await redis.get(`join:temp:${tempToken}`);
+      if (!raw) {
+        throw new ApiError(400, "TEMP_TOKEN_EXPIRED", "Team assignment expired. Please try again.");
+      }
+      const pending = JSON.parse(raw as string);
+      if (pending.wallet !== wallet || pending.poolId !== pool.id) {
+        throw new ApiError(400, "TEMP_TOKEN_INVALID", "Invalid team assignment token.");
+      }
+      resolvedTeamId = pending.teamId;
+      await redis.del(`join:temp:${tempToken}`);
+    }
+
     if (Number(pool.entry_fee_usdc) > 0) {
       if (!stakeTxSignature) {
         throw new ApiError(
@@ -74,23 +92,46 @@ export async function POST(
         );
       }
 
-      const valid = await verifyUsdcTransfer(
+      const validTransfer = await verifyUsdcTransfer(
         stakeTxSignature,
         wallet,
         pool.escrow_pda ?? "",
         Number(pool.entry_fee_usdc),
       );
 
-      if (!valid) {
+      if (!validTransfer) {
         throw new ApiError(
           402,
           "PAYMENT_VERIFICATION_FAILED",
           "Could not verify USDC transfer to escrow",
         );
       }
+
+      const validJoinTx = await verifyJoinPoolTx(
+        stakeTxSignature,
+        pool.id,
+        wallet,
+      );
+
+      if (!validJoinTx) {
+        throw new ApiError(
+          402,
+          "JOIN_TX_VERIFICATION_FAILED",
+          "Could not verify join pool transaction on-chain",
+        );
+      }
     }
 
-    const assignedTeam = await assignTeam(pool.id);
+    if (resolvedTeamId) {
+      const allTeams = await getAllTeams();
+      const found = allTeams.find((t) => t.id === resolvedTeamId);
+      if (found) {
+        assignedTeam = found;
+      }
+    }
+    if (!assignedTeam) {
+      assignedTeam = await assignTeam(pool.id);
+    }
 
     const { data: member, error: insertError } = await supabaseAdmin
       .from("pool_members")

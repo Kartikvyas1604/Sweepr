@@ -77,12 +77,17 @@ export const api = {
       request<{ pool: any; leaderboard: any[]; memberCount: number; spotsRemaining: number; joinUrl: string }>(
         `/api/pools/${joinCode}`,
       ),
-    join: (joinCode: string, displayName: string, stakeTxSignature?: string) =>
+    assignTeam: (joinCode: string) =>
+      request<{ tempToken: string; team: any; teamIdBytes: number[]; entryFeeUsdc: number }>(
+        `/api/pools/${joinCode}/assign-team`,
+        { method: "POST" },
+      ),
+    join: (joinCode: string, displayName: string, stakeTxSignature?: string, tempToken?: string) =>
       request<{ member: any; assignedTeam: any; leaderboard: any[] }>(
         `/api/pools/${joinCode}/join`,
         {
           method: "POST",
-          body: JSON.stringify({ displayName, stakeTxSignature }),
+          body: JSON.stringify({ displayName, stakeTxSignature, tempToken }),
         },
       ),
     leaderboard: (joinCode: string) =>
