@@ -64,6 +64,10 @@ export const api = {
   },
 
   pools: {
+    list: (wallet?: string) => {
+      const params = wallet ? `?wallet=${encodeURIComponent(wallet)}` : "";
+      return request<{ pools: any[] }>(`/api/pools${params}`);
+    },
     create: (name: string, entryFeeUsdc: number, maxMembers?: number) =>
       request<{ pool: any; joinUrl: string }>("/api/pools", {
         method: "POST",

@@ -8,16 +8,20 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { TopNav } from "@/components/ui/top-nav";
 import { WalletButton } from "@/components/ui/wallet-button";
-import { getPools } from "@/lib/store";
-import type { Pool } from "@/lib/types";
-import { Plus, Users, ArrowRight, Globe, EyeOff } from "lucide-react";
+import { api } from "@/lib/api-client";
+import { Plus, Users, ArrowRight, Globe } from "lucide-react";
 
 export default function PoolsPage() {
   const router = useRouter();
-  const [pools, setPools] = useState<Pool[]>([]);
+  const [pools, setPools] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    setPools(getPools());
+    api.pools.list().then((data) => {
+      setPools(data.pools);
+    }).catch(() => {
+      setPools([]);
+    }).finally(() => setLoading(false));
   }, []);
 
   return (
@@ -48,7 +52,15 @@ export default function PoolsPage() {
           </Button>
         </motion.div>
 
-        {pools.length === 0 ? (
+        {loading ? (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="flex flex-col items-center gap-4 py-16"
+          >
+            <p className="font-mono text-[11px] text-ink-muted/40">Loading pools...</p>
+          </motion.div>
+        ) : pools.length === 0 ? (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -71,7 +83,7 @@ export default function PoolsPage() {
               >
                 <Card
                   className="cursor-pointer transition-all duration-200 hover:bg-elevated/20"
-                  onClick={() => router.push(`/pool/${pool.id}`)}
+                  onClick={() => router.push(`/pool/${pool.joinCode}`)}
                 >
                   <CardContent className="flex items-center justify-between py-4">
                     <div className="flex items-center gap-4">
@@ -83,35 +95,24 @@ export default function PoolsPage() {
                           <p className="font-body text-sm font-medium text-ink">
                             {pool.name}
                           </p>
-                          {pool.status === "settled" && (
+                          {pool.status === "settled" ? (
                             <Badge variant="elevated" size="sm">Settled</Badge>
-                          )}
-                          {pool.status !== "settled" && (
+                          ) : (
                             <Badge variant="live" size="sm">Open</Badge>
                           )}
                         </div>
                         <div className="mt-0.5 flex items-center gap-2 font-mono text-[10px] text-ink-muted/40">
-                          <span>{pool.participantCount} players</span>
+                          <span>{pool.memberCount} players</span>
                           <span>·</span>
-                          <span>{pool.totalPot} USDC pot</span>
+                          <span>{pool.totalStakedUsdc} USDC pot</span>
                           <span>·</span>
-                          <span>{pool.entryFee} USDC entry</span>
+                          <span>{pool.entryFeeUsdc} USDC entry</span>
                         </div>
                       </div>
                     </div>
 
                     <div className="flex items-center gap-3">
-                      {pool.isPrivate ? (
-                        <Badge variant="outline" size="sm">
-                          <EyeOff className="h-2.5 w-2.5" />
-                          Private
-                        </Badge>
-                      ) : (
-                        <Badge variant="outline" size="sm">
-                          <Globe className="h-2.5 w-2.5" />
-                          Public
-                        </Badge>
-                      )}
+                      <Globe className="h-4 w-4 text-ink-muted/30" />
                       <ArrowRight className="h-4 w-4 text-ink-muted/30" />
                     </div>
                   </CardContent>

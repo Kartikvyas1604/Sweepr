@@ -10,6 +10,91 @@ import { publishPoolUpdate } from "@/lib/redis";
 import { env } from "@/lib/env";
 import { logger } from "@/lib/logger";
 
+export async function GET(request: Request) {
+  try {
+    const url = new URL(request.url);
+    const wallet = url.searchParams.get("wallet");
+
+    let memberPools: { pool_id: string; team_id: string; team_name: string; team_flag_url: string | null; team_group: string | null; score: number; rank: number | null }[] | null = null;
+    if (wallet) {
+      const { data } = await supabaseAdmin
+        .from("pool_members")
+        .select("pool_id, team_id, team_name, team_flag_url, team_group, score, rank")
+        .eq("wallet", wallet);
+      memberPools = data;
+    }
+
+    let query = supabaseAdmin.from("pools").select("*");
+    const walletPoolIds = memberPools?.map((m) => m.pool_id);
+    if (walletPoolIds && walletPoolIds.length > 0) {
+      query = query.in("id", walletPoolIds);
+    } else if (wallet && (!walletPoolIds || walletPoolIds.length === 0)) {
+      return Response.json({ pools: [] });
+    }
+
+    const { data: pools, error } = await query
+      .order("created_at", { ascending: false })
+      .limit(50);
+
+    if (error) {
+      logger.error("Failed to list pools", { error, wallet });
+      throw new ApiError(500, "POOLS_LIST_FAILED", "Failed to list pools");
+    }
+
+    const poolIdsToCount = (pools ?? []).map((p) => p.id);
+    const { data: allMembers } = poolIdsToCount.length > 0
+      ? await supabaseAdmin
+          .from("pool_members")
+          .select("pool_id, wallet, team_id, team_name, team_flag_url, team_group, score, rank")
+          .in("pool_id", poolIdsToCount)
+      : { data: [] };
+
+    const countMap = new Map<string, number>();
+    const memberByPoolId = new Map<string, typeof allMembers>();
+    if (allMembers) {
+      for (const m of allMembers) {
+        countMap.set(m.pool_id, (countMap.get(m.pool_id) ?? 0) + 1);
+        if (wallet && m.wallet === wallet) {
+          memberByPoolId.set(m.pool_id, [m]);
+        }
+      }
+    }
+
+    return Response.json({
+      pools: (pools ?? []).map((pool) => {
+        const myMember = memberByPoolId.get(pool.id)?.[0];
+        return {
+          id: pool.id,
+          name: pool.name,
+          createdBy: pool.created_by,
+          joinCode: pool.join_code,
+          status: pool.status,
+          entryFeeUsdc: Number(pool.entry_fee_usdc),
+          totalStakedUsdc: Number(pool.total_staked_usdc),
+          maxMembers: pool.max_members,
+          memberCount: countMap.get(pool.id) ?? 0,
+          escrowPda: pool.escrow_pda,
+          createdAt: pool.created_at,
+          winnerWallet: pool.winner_wallet,
+          settlementTx: pool.settlement_tx,
+          ...(myMember ? {
+            myTeam: {
+              teamId: myMember.team_id,
+              teamName: myMember.team_name,
+              teamFlagUrl: myMember.team_flag_url,
+              teamGroup: myMember.team_group,
+              score: myMember.score,
+              rank: myMember.rank,
+            },
+          } : {}),
+        };
+      }),
+    });
+  } catch (e) {
+    return handleRouteError(e);
+  }
+}
+
 const bodySchema = z.object({
   name: z.string().min(3).max(60),
   entryFeeUsdc: z.number().min(0),

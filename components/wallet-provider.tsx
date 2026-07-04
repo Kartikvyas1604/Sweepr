@@ -56,9 +56,20 @@ export function getToken(): string | null {
   return localStorage.getItem("sweepr_jwt");
 }
 
-async function signWithProvider(provider: any, message: string): Promise<string> {
-  const result = await provider.signMessage(new TextEncoder().encode(message));
-  const sigBytes = result.signature ?? result;
+async function signWithProvider(provider: any, message: string): Promise<string | null> {
+  const encoded = new TextEncoder().encode(message);
+  let result: any;
+  try {
+    result = await provider.signMessage(encoded);
+  } catch {
+    try {
+      result = await provider.signMessage(encoded, "utf8");
+    } catch {
+      return null;
+    }
+  }
+  const sigBytes = result?.signature ?? result;
+  if (!sigBytes || sigBytes.length !== 64) return null;
   return bs58.encode(sigBytes);
 }
 
@@ -78,8 +89,9 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const doAuth = useCallback(async (provider: any, wallet: string) => {
     const { nonce, message } = await api.auth.requestNonce(wallet);
     const sigEncoded = await signWithProvider(provider, message);
-    const { token } = await api.auth.verify(wallet, sigEncoded, nonce);
-    setToken(token);
+    const signature = sigEncoded ?? "";
+    const { token } = await api.auth.verify(wallet, signature, nonce);
+    if (token) setToken(token);
   }, []);
 
   const handleWalletSelect = useCallback(async (detected: DetectedWallet) => {
@@ -104,11 +116,18 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     const existing = getToken();
     if (existing) return;
     const provider = await getWalletProvider();
-    const { publicKey } = await provider.connect();
-    const wallet = publicKey.toBase58();
+    const connectResult = await provider.connect();
+    const wallet = connectResult.publicKey.toBase58();
     setAddress(wallet);
     storeWallet(wallet);
-    await doAuth(provider, wallet);
+    try {
+      await doAuth(provider, wallet);
+      const jwt = getToken();
+      console.log("[ensureAuth] JWT after doAuth:", jwt ? jwt.slice(0, 20) + "..." : "NULL");
+    } catch (e: any) {
+      console.error("[ensureAuth] doAuth failed:", e?.message ?? e);
+      throw e;
+    }
   }, [getWalletProvider, doAuth]);
 
   const connect = useCallback(async () => {

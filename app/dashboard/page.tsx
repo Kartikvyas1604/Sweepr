@@ -9,28 +9,22 @@ import { Button } from "@/components/ui/button";
 import { TopNav } from "@/components/ui/top-nav";
 import { WalletButton } from "@/components/ui/wallet-button";
 import { useWallet } from "@/components/wallet-provider";
-import {
-  getPoolsForUser,
-  getParticipantInPool,
-} from "@/lib/store";
-import type { Pool } from "@/lib/types";
+import { api } from "@/lib/api-client";
 import {
   Plus,
   Trophy,
   Users,
-  Clock,
   CheckCircle2,
   Wallet,
   TrendingUp,
   Medal,
-  EyeOff,
   Search,
   Sparkles,
   Filter,
 } from "lucide-react";
 
 interface PoolCardProps {
-  pool: Pool;
+  pool: any;
   userAddress: string;
   isPast: boolean;
   index: number;
@@ -38,8 +32,9 @@ interface PoolCardProps {
 }
 
 function PoolCard({ pool, userAddress, isPast, index, onClick }: PoolCardProps) {
-  const participant = getParticipantInPool(pool.id, userAddress);
-  const isWinner = isPast && participant && pool.winnerAddresses?.includes(userAddress);
+  const isWinner = isPast && pool.winnerWallet === userAddress;
+
+  const team = pool.myTeam;
 
   return (
     <motion.div
@@ -54,7 +49,7 @@ function PoolCard({ pool, userAddress, isPast, index, onClick }: PoolCardProps) 
       >
         <CardContent className="flex items-center gap-4 py-4">
           <div className="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-elevated/50">
-            <span className="text-xl">{participant?.team.flag ?? "🏳️"}</span>
+            <span className="text-xl">{team?.teamFlagUrl ?? "🏳️"}</span>
             {isWinner && (
               <motion.div
                 className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-money"
@@ -77,22 +72,19 @@ function PoolCard({ pool, userAddress, isPast, index, onClick }: PoolCardProps) 
               ) : (
                 <Badge variant="live" size="sm">Active</Badge>
               )}
-              {pool.isPrivate && (
-                <EyeOff className="h-3 w-3 shrink-0 text-ink-muted/40" />
-              )}
             </div>
 
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1 font-mono text-[11px] text-ink-muted/60">
               <span className="flex items-center gap-1">
                 <Users className="h-3 w-3" />
-                {pool.participantCount}
+                {pool.memberCount}
               </span>
-              <span className="tabular-nums">{pool.totalPot.toLocaleString()} USDC</span>
-              <span className="tabular-nums">{pool.entryFee} USDC entry</span>
-              {participant && (
+              <span className="tabular-nums">{Number(pool.totalStakedUsdc).toLocaleString()} USDC</span>
+              <span className="tabular-nums">{pool.entryFeeUsdc} USDC entry</span>
+              {team && (
                 <span className="flex items-center gap-1">
                   <Medal className="h-3 w-3" />
-                  #{participant.rank}
+                  #{team.rank}
                 </span>
               )}
             </div>
@@ -108,13 +100,13 @@ function PoolCard({ pool, userAddress, isPast, index, onClick }: PoolCardProps) 
             </div>
           )}
 
-          {isPast && participant && !isWinner && (
+          {isPast && team && !isWinner && (
             <div className="flex shrink-0 flex-col items-center gap-0.5 rounded-lg border border-hairline bg-elevated/30 px-3 py-2">
               <span className="font-display text-lg leading-none text-ink-muted/60">
-                #{participant.rank}
+                #{team.rank}
               </span>
               <span className="font-mono text-[10px] text-ink-muted/30">
-                {participant.score} pts
+                {team.score} pts
               </span>
             </div>
           )}
@@ -163,27 +155,34 @@ function StatCard({
 export default function DashboardPage() {
   const router = useRouter();
   const { connected, address } = useWallet();
-  const [pools, setPools] = useState<Pool[]>([]);
+  const [pools, setPools] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<"active" | "past">("active");
   const [search, setSearch] = useState("");
 
   useEffect(() => {
+    setLoading(true);
     if (address) {
-      setPools(getPoolsForUser(address));
+      api.pools.list(address).then((data) => {
+        setPools(data.pools);
+      }).catch(() => {
+        setPools([]);
+      }).finally(() => setLoading(false));
     } else {
       setPools([]);
+      setLoading(false);
     }
   }, [address]);
 
   const { current, past, stats } = useMemo(() => {
-    const current = pools.filter((p) => p.status !== "settled");
-    const past = pools.filter((p) => p.status === "settled");
-    const wins = past.filter((p) => p.winnerAddresses?.includes(address ?? ""));
+    const current = pools.filter((p: any) => p.status !== "settled");
+    const past = pools.filter((p: any) => p.status === "settled");
+    const wins = past.filter((p: any) => p.winnerWallet === address);
     let best = Infinity;
     for (const p of pools) {
-      const participant = getParticipantInPool(p.id, address ?? "");
-      if (participant && participant.rank > 0 && participant.rank < best) {
-        best = participant.rank;
+      const rank = p.myTeam?.rank;
+      if (rank && rank > 0 && rank < best) {
+        best = rank;
       }
     }
     return {
@@ -203,9 +202,9 @@ export default function DashboardPage() {
     if (!search) return source;
     const q = search.toLowerCase();
     return source.filter(
-      (p) =>
+      (p: any) =>
         p.name.toLowerCase().includes(q) ||
-        p.id.toLowerCase().includes(q),
+        p.joinCode.toLowerCase().includes(q),
     );
   }, [current, past, tab, search]);
 
@@ -307,7 +306,15 @@ export default function DashboardPage() {
           </motion.div>
         )}
 
-        {pools.length === 0 ? (
+        {loading ? (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="flex flex-1 flex-col items-center justify-center gap-4 py-16"
+          >
+            <p className="font-mono text-[11px] text-ink-muted/40">Loading your pools...</p>
+          </motion.div>
+        ) : pools.length === 0 ? (
           <motion.div
             className="flex flex-1 flex-col items-center justify-center gap-6 py-16"
             initial={{ opacity: 0 }}
@@ -407,7 +414,7 @@ export default function DashboardPage() {
                       userAddress={address!}
                       isPast={tab === "past"}
                       index={i}
-                      onClick={() => router.push(`/pool/${pool.id}`)}
+                      onClick={() => router.push(`/pool/${pool.joinCode}`)}
                     />
                   ))}
                 </motion.div>

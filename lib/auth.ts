@@ -4,6 +4,7 @@ import bs58 from "bs58";
 import { env } from "./env";
 import { redis } from "./redis";
 import { ApiError } from "./errors";
+import { logger } from "./logger";
 
 const JWT_SECRET = new TextEncoder().encode(env.JWT_SECRET);
 const SIGN_MESSAGE_PREFIX = "Sweepr sign-in: ";
@@ -26,17 +27,62 @@ export async function verifyAndConsumeNonce(
   return true;
 }
 
-export function verifyWalletSignature(
+export async function verifyWalletSignature(
   wallet: string,
   signature: string,
   nonce: string,
-): boolean {
+): Promise<boolean> {
   try {
     const publicKeyBytes = bs58.decode(wallet);
     const signatureBytes = bs58.decode(signature);
     const messageBytes = new TextEncoder().encode(`${SIGN_MESSAGE_PREFIX}${nonce}`);
-    return nacl.sign.detached.verify(messageBytes, signatureBytes, publicKeyBytes);
-  } catch {
+
+    // Try tweetnacl first (most compatible)
+    const naclResult = nacl.sign.detached.verify(
+      messageBytes,
+      signatureBytes,
+      publicKeyBytes,
+    );
+    if (naclResult) return true;
+
+    logger.warn("tweetnacl verify failed, trying Web Crypto", {
+      wallet,
+      nonce,
+      expectedMsg: `${SIGN_MESSAGE_PREFIX}${nonce}`,
+      sigLen: signatureBytes.length,
+      pubLen: publicKeyBytes.length,
+      msgLen: messageBytes.length,
+      sigPrefix: Array.from(signatureBytes.slice(0, 8)).join(","),
+    });
+
+    // Fallback: try with Web Crypto (Ed25519)
+    try {
+      const key = await crypto.subtle.importKey(
+        "raw",
+        Buffer.from(publicKeyBytes),
+        { name: "Ed25519" },
+        false,
+        ["verify"],
+      );
+      const webResult = await crypto.subtle.verify(
+        "Ed25519",
+        key,
+        Buffer.from(signatureBytes),
+        Buffer.from(messageBytes),
+      );
+      if (webResult) {
+        logger.info("Web Crypto fallback succeeded", { wallet });
+        return true;
+      }
+      logger.warn("Web Crypto also rejected the signature", { wallet });
+    } catch (e) {
+      logger.warn("Web Crypto Ed25519 not available", { wallet, error: String(e) });
+    }
+
+    logger.warn("All signature verification methods failed", { wallet });
+    return false;
+  } catch (e) {
+    logger.warn("Signature verification threw", { wallet, error: String(e) });
     return false;
   }
 }
