@@ -1,8 +1,17 @@
 "use client";
 
-import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from "react";
+import {
+  createContext,
+  useContext,
+  useState,
+  useCallback,
+  useEffect,
+  useRef,
+  type ReactNode,
+} from "react";
 import bs58 from "bs58";
 import { api, setToken, clearToken } from "@/lib/api-client";
+import { WalletSelector, type DetectedWallet } from "./wallet-selector";
 
 interface WalletContextValue {
   address: string | null;
@@ -10,8 +19,7 @@ interface WalletContextValue {
   connecting: boolean;
   connect: () => Promise<void>;
   disconnect: () => void;
-  signMessage: (message: string) => Promise<string>;
-  getToken: () => string | null;
+  ensureAuth: () => Promise<void>;
 }
 
 const WalletContext = createContext<WalletContextValue>({
@@ -20,8 +28,7 @@ const WalletContext = createContext<WalletContextValue>({
   connecting: false,
   connect: async () => {},
   disconnect: () => {},
-  signMessage: async () => "",
-  getToken: () => null,
+  ensureAuth: async () => {},
 });
 
 function getStoredWallet(): string | null {
@@ -34,82 +41,126 @@ function storeWallet(addr: string | null) {
   else localStorage.removeItem("sweepr_wallet");
 }
 
-function getSolanaProvider() {
+function getStoredWalletId(): string | null {
   if (typeof window === "undefined") return null;
-  const anyWindow = window as any;
-  return anyWindow.phantom?.solana || anyWindow.solana || null;
+  return localStorage.getItem("sweepr_wallet_id");
+}
+
+function storeWalletId(id: string | null) {
+  if (id) localStorage.setItem("sweepr_wallet_id", id);
+  else localStorage.removeItem("sweepr_wallet_id");
+}
+
+export function getToken(): string | null {
+  if (typeof window === "undefined") return null;
+  return localStorage.getItem("sweepr_jwt");
+}
+
+async function signWithProvider(provider: any, message: string): Promise<string> {
+  const result = await provider.signMessage(new TextEncoder().encode(message));
+  const sigBytes = result.signature ?? result;
+  return bs58.encode(sigBytes);
 }
 
 export function WalletProvider({ children }: { children: ReactNode }) {
   const [address, setAddress] = useState<string | null>(null);
   const [connecting, setConnecting] = useState(false);
+  const [selectorOpen, setSelectorOpen] = useState(false);
+  const connectingRef = useRef(false);
+  const providerRef = useRef<any>(null);
+  const pendingResolveRef = useRef<((value: any) => void) | null>(null);
 
   useEffect(() => {
     const stored = getStoredWallet();
     if (stored) setAddress(stored);
   }, []);
 
-  const getProvider = useCallback(() => {
-    const provider = getSolanaProvider();
-    if (!provider?.isPhantom && !provider?.isBackpack) {
-      throw new Error("Please install Phantom or Backpack wallet");
-    }
-    return provider;
+  const doAuth = useCallback(async (provider: any, wallet: string) => {
+    const { nonce, message } = await api.auth.requestNonce(wallet);
+    const sigEncoded = await signWithProvider(provider, message);
+    const { token } = await api.auth.verify(wallet, sigEncoded, nonce);
+    setToken(token);
   }, []);
 
-  const signMessage = useCallback(async (message: string): Promise<string> => {
-    const provider = getProvider();
-    if (!provider.signMessage) {
-      throw new Error("Wallet does not support message signing");
-    }
-    const encoded = new TextEncoder().encode(message);
-    const { signature } = await provider.signMessage(encoded, "utf8");
-    return bs58.encode(signature);
-  }, [getProvider]);
+  const handleWalletSelect = useCallback(async (detected: DetectedWallet) => {
+    setSelectorOpen(false);
+    providerRef.current = detected.provider;
+    storeWalletId(detected.id);
+    const resolve = pendingResolveRef.current;
+    pendingResolveRef.current = null;
+    if (resolve) resolve(detected.provider);
+  }, []);
+
+  const getWalletProvider = useCallback(async (): Promise<any> => {
+    const storedId = getStoredWalletId();
+    if (storedId && providerRef.current) return providerRef.current;
+    return new Promise((resolve) => {
+      pendingResolveRef.current = resolve;
+      setSelectorOpen(true);
+    });
+  }, []);
+
+  const ensureAuth = useCallback(async () => {
+    const existing = getToken();
+    if (existing) return;
+    const provider = await getWalletProvider();
+    const { publicKey } = await provider.connect();
+    const wallet = publicKey.toBase58();
+    setAddress(wallet);
+    storeWallet(wallet);
+    await doAuth(provider, wallet);
+  }, [getWalletProvider, doAuth]);
 
   const connect = useCallback(async () => {
+    if (connectingRef.current) return;
+    connectingRef.current = true;
     setConnecting(true);
     try {
-      const provider = getProvider();
+      const provider = await getWalletProvider();
       const { publicKey } = await provider.connect();
       const wallet = publicKey.toBase58();
       setAddress(wallet);
       storeWallet(wallet);
+      // Auth happens lazily via ensureAuth on first action
     } catch (e: any) {
-      if (e.code === 4001) {
-        throw new Error("Connection rejected");
-      }
+      if (e.code === 4001) throw new Error("Connection rejected");
       throw e;
     } finally {
+      connectingRef.current = false;
       setConnecting(false);
     }
-  }, [getProvider]);
+  }, [getWalletProvider]);
 
   const disconnect = useCallback(() => {
     setAddress(null);
     storeWallet(null);
+    providerRef.current = null;
     clearToken();
-    const provider = getSolanaProvider();
-    if (provider?.disconnect) provider.disconnect();
   }, []);
 
   return (
-    <WalletContext.Provider
-      value={{
-        address,
-        connected: !!address,
-        connecting,
-        connect,
-        disconnect,
-        signMessage,
-        getToken: () => {
-          if (typeof window === "undefined") return null;
-          return localStorage.getItem("sweepr_jwt");
-        },
-      }}
-    >
-      {children}
-    </WalletContext.Provider>
+    <>
+      <WalletSelector
+        open={selectorOpen}
+        onSelect={handleWalletSelect}
+        onClose={() => {
+          setSelectorOpen(false);
+          pendingResolveRef.current = null;
+        }}
+      />
+      <WalletContext.Provider
+        value={{
+          address,
+          connected: !!address,
+          connecting,
+          connect,
+          disconnect,
+          ensureAuth,
+        }}
+      >
+        {children}
+      </WalletContext.Provider>
+    </>
   );
 }
 

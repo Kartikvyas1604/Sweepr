@@ -24,10 +24,16 @@ async function fetchFromTxLINE<T>(
   path: string,
   schema: z.ZodSchema<T>,
 ): Promise<T> {
+  const apiKey = env.TXLINE_API_KEY;
+  if (!apiKey) {
+    throw new TxLINEError(
+      "TXLINE_API_KEY not configured. Get one at https://txline.txodds.com (free tier available)",
+    );
+  }
   const url = `${env.TXLINE_BASE_URL}${path}`;
   const response = await fetch(url, {
     headers: {
-      Authorization: `Bearer ${env.TXLINE_API_KEY}`,
+      Authorization: `Bearer ${apiKey}`,
       Accept: "application/json",
     },
   });

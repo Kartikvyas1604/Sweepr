@@ -62,7 +62,7 @@ export async function POST(request: Request) {
     }
 
     if (entryFeeUsdc > 0) {
-      callInitializePool(poolId, entryFeeUsdc).catch((e) => {
+      callInitializePool(poolId, entryFeeUsdc, maxMembers).catch((e) => {
         logger.warn("On-chain pool init failed (non-blocking)", {
           poolId,
           error: String(e),

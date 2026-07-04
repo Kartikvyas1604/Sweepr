@@ -6,6 +6,9 @@ import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { TopNav } from "@/components/ui/top-nav";
+import { WalletButton } from "@/components/ui/wallet-button";
+import { useWallet } from "@/components/wallet-provider";
 import { api } from "@/lib/api-client";
 import {
   ArrowRight,
@@ -35,15 +38,18 @@ const STEPS = [
 
 export default function Home() {
   const router = useRouter();
+  const { connected, ensureAuth } = useWallet();
   const [poolName, setPoolName] = useState("");
   const [entryFee, setEntryFee] = useState("");
   const [isPrivate, setIsPrivate] = useState(false);
   const [passphrase, setPassphrase] = useState("");
 
   async function handleCreate() {
+    if (!connected) return;
     const fee = parseFloat(entryFee);
     if (!poolName || !fee || fee <= 0) return;
     try {
+      await ensureAuth();
       const result = await api.pools.create(poolName, fee);
       router.push(`/pool/${result.pool.joinCode}`);
     } catch {
@@ -53,6 +59,8 @@ export default function Home() {
 
   return (
     <div className="relative flex min-h-dvh flex-col">
+      <TopNav title="Sweepr" right={<WalletButton />} />
+
       {/* Top ticker bar */}
       <div className="relative z-10 flex h-8 items-center overflow-hidden border-b border-hairline bg-panel/60 px-4">
         <div className="flex w-full items-center justify-between font-mono text-[10px] uppercase tracking-[0.2em] text-ink-muted/60">
@@ -196,10 +204,10 @@ export default function Home() {
                 <Button
                   size="lg"
                   className="w-full"
-                  disabled={!poolName || !entryFee || parseFloat(entryFee) <= 0}
+                  disabled={!connected || !poolName || !entryFee || parseFloat(entryFee) <= 0}
                   onClick={handleCreate}
                 >
-                  Create Pool
+                  {connected ? "Create Pool" : "Connect Wallet to Create"}
                   <ArrowRight className="h-4 w-4" />
                 </Button>
                 <p className="text-center font-mono text-[10px] uppercase tracking-widest text-ink-muted/40">
