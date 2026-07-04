@@ -1,5 +1,23 @@
-import { Connection, PublicKey, Keypair } from "@solana/web3.js";
-import { Program, AnchorProvider, Idl } from "@coral-xyz/anchor";
+import {
+  Connection,
+  PublicKey,
+  Keypair,
+  SystemProgram,
+  TransactionMessage,
+  VersionedTransaction,
+} from "@solana/web3.js";
+import {
+  Program,
+  AnchorProvider,
+  Idl,
+  BN,
+  utils as anchorUtils,
+} from "@coral-xyz/anchor";
+import {
+  TOKEN_PROGRAM_ID,
+  ASSOCIATED_TOKEN_PROGRAM_ID,
+  getOrCreateAssociatedTokenAccount,
+} from "@solana/spl-token";
 import bs58 from "bs58";
 import { env } from "./env";
 import { logger } from "./logger";
@@ -8,6 +26,13 @@ import { ApiError } from "./errors";
 let connection: Connection | null = null;
 let oracleKeypair: Keypair | null = null;
 let program: Program | null = null;
+
+const USDC_MAINNET_MINT = new PublicKey(
+  "Gh9ZwEmdLJ8DscKNTkTqPbNwLNNBjuSzaG9Vp2KGtKJr",
+);
+const USDC_DEVNET_MINT = new PublicKey(
+  "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU",
+);
 
 export function getConnection(): Connection {
   if (!connection) {
@@ -22,6 +47,12 @@ export function getOracleKeypair(): Keypair {
     oracleKeypair = Keypair.fromSecretKey(decoded);
   }
   return oracleKeypair;
+}
+
+export function getUsdcMint(): PublicKey {
+  return env.SOLANA_NETWORK === "mainnet-beta"
+    ? USDC_MAINNET_MINT
+    : USDC_DEVNET_MINT;
 }
 
 export function getProgram(): Program {
@@ -81,6 +112,244 @@ export function deriveEscrowPDA(poolId: string): [PublicKey, number] {
   );
 }
 
+export function deriveEventNoncePDA(
+  eventNonce: string,
+): [PublicKey, number] {
+  return PublicKey.findProgramAddressSync(
+    [Buffer.from("event"), Buffer.from(eventNonce, "hex")],
+    new PublicKey(env.SWEEPR_PROGRAM_ID),
+  );
+}
+
+export async function getEscrowAta(poolId: string): Promise<PublicKey> {
+  const [poolPda] = derivePoolPDA(poolId);
+  return anchorUtils.token.associatedAddress({
+    mint: getUsdcMint(),
+    owner: poolPda,
+  });
+}
+
+export async function callInitializePool(
+  poolId: string,
+  entryFeeUsdc: number,
+  maxMembers: number,
+): Promise<string> {
+  try {
+    const prog = getProgram();
+    const [poolPda] = derivePoolPDA(poolId);
+    const escrowAta = await getEscrowAta(poolId);
+    const usdcMint = getUsdcMint();
+
+    const sig = await (prog.methods as any)
+      .initializePool(
+        Array.from(uuidToBytes(poolId)),
+        new BN(entryFeeUsdc),
+        maxMembers,
+      )
+      .accounts({
+        authority: getOracleKeypair().publicKey,
+        poolState: poolPda,
+        escrowVault: escrowAta,
+        usdcMint: usdcMint,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+        systemProgram: SystemProgram.programId,
+      })
+      .rpc();
+
+    return sig;
+  } catch (e) {
+    logger.error("callInitializePool failed", {
+      poolId,
+      entryFeeUsdc,
+      error: String(e),
+    });
+    throw new ApiError(
+      500,
+      "INIT_POOL_FAILED",
+      "Failed to initialize pool on-chain",
+    );
+  }
+}
+
+export async function callJoinPool(
+  poolId: string,
+  memberWallet: PublicKey,
+  teamId: number[],
+): Promise<string> {
+  try {
+    const prog = getProgram();
+    const [poolPda] = derivePoolPDA(poolId);
+    const [memberPda] = deriveMemberPDA(poolId, memberWallet.toBase58());
+    const usdcMint = getUsdcMint();
+    const escrowAta = await getEscrowAta(poolId);
+
+    const pool = await (prog.account as any).poolState.fetch(poolPda);
+    const isPaidPool = pool.entryFeeUsdc.toNumber() > 0;
+
+    let memberUsdcAta = null;
+    let escrowVaultAccount = null;
+
+    if (isPaidPool) {
+      memberUsdcAta = (
+        await getOrCreateAssociatedTokenAccount(
+          getConnection(),
+          getOracleKeypair(),
+          usdcMint,
+          memberWallet,
+        )
+      ).address;
+      escrowVaultAccount = escrowAta;
+    }
+
+    const sig = await (prog.methods as any)
+      .joinPool(Array.from(uuidToBytes(poolId)), Array.from(teamId))
+      .accounts({
+        member: memberWallet,
+        poolState: poolPda,
+        memberState: memberPda,
+        memberUsdcAta: memberUsdcAta,
+        escrowVault: escrowVaultAccount,
+        usdcMint: usdcMint,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+        systemProgram: SystemProgram.programId,
+      })
+      .rpc();
+
+    return sig;
+  } catch (e) {
+    logger.error("callJoinPool failed", {
+      poolId,
+      memberWallet: memberWallet.toBase58(),
+      error: String(e),
+    });
+    throw new ApiError(
+      500,
+      "JOIN_POOL_FAILED",
+      "Failed to join pool on-chain",
+    );
+  }
+}
+
+export async function callUpdateScore(
+  poolId: string,
+  memberWallet: string,
+  points: number,
+  eventNonce: string,
+): Promise<string> {
+  try {
+    const prog = getProgram();
+    const [poolPda] = derivePoolPDA(poolId);
+    const [memberPda] = deriveMemberPDA(poolId, memberWallet);
+    const [eventNoncePda] = deriveEventNoncePDA(eventNonce);
+
+    const sig = await (prog.methods as any)
+      .updateScore(
+        Array.from(uuidToBytes(poolId)),
+        new PublicKey(memberWallet),
+        points,
+        Array.from(Buffer.from(eventNonce, "hex")),
+      )
+      .accounts({
+        oracle: getOracleKeypair().publicKey,
+        poolState: poolPda,
+        memberState: memberPda,
+        eventNonceAccount: eventNoncePda,
+        systemProgram: SystemProgram.programId,
+      })
+      .rpc();
+
+    return sig;
+  } catch (e) {
+    logger.error("callUpdateScore failed", {
+      poolId,
+      memberWallet,
+      points,
+      eventNonce,
+      error: String(e),
+    });
+    throw new ApiError(
+      500,
+      "SCORE_UPDATE_FAILED",
+      "Failed to update score on-chain",
+    );
+  }
+}
+
+export async function callSettlePool(
+  poolId: string,
+  winnerWallet: string,
+): Promise<string> {
+  try {
+    const prog = getProgram();
+    const [poolPda] = derivePoolPDA(poolId);
+    const [memberPda] = deriveMemberPDA(poolId, winnerWallet);
+    const escrowAta = await getEscrowAta(poolId);
+    const usdcMint = getUsdcMint();
+
+    const pool = await (prog.account as any).poolState.fetch(poolPda);
+    const isPaidPool = pool.entryFeeUsdc.toNumber() > 0;
+
+    let winnerUsdcAta = null;
+    let protocolFeeAta = null;
+    let escrowVaultAccount = null;
+
+    if (isPaidPool) {
+      winnerUsdcAta = (
+        await getOrCreateAssociatedTokenAccount(
+          getConnection(),
+          getOracleKeypair(),
+          usdcMint,
+          new PublicKey(winnerWallet),
+        )
+      ).address;
+
+      protocolFeeAta = (
+        await getOrCreateAssociatedTokenAccount(
+          getConnection(),
+          getOracleKeypair(),
+          usdcMint,
+          new PublicKey(env.PROTOCOL_FEE_WALLET),
+        )
+      ).address;
+
+      escrowVaultAccount = escrowAta;
+    }
+
+    const sig = await (prog.methods as any)
+      .settlePool(
+        Array.from(uuidToBytes(poolId)),
+        new PublicKey(winnerWallet),
+      )
+      .accounts({
+        oracle: getOracleKeypair().publicKey,
+        poolState: poolPda,
+        winnerMemberState: memberPda,
+        winnerUsdcAta: winnerUsdcAta,
+        escrowVault: escrowVaultAccount,
+        protocolFeeAta: protocolFeeAta,
+        usdcMint: usdcMint,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        systemProgram: SystemProgram.programId,
+      })
+      .rpc();
+
+    return sig;
+  } catch (e) {
+    logger.error("callSettlePool failed", {
+      poolId,
+      winnerWallet,
+      error: String(e),
+    });
+    throw new ApiError(
+      500,
+      "SETTLE_FAILED",
+      "Failed to settle pool on-chain",
+    );
+  }
+}
+
 export async function verifyUsdcTransfer(
   txSignature: string,
   expectedFrom: string,
@@ -99,24 +368,35 @@ export async function verifyUsdcTransfer(
     const fromPubkey = new PublicKey(expectedFrom);
     const toPubkey = new PublicKey(expectedTo);
 
-    const message = tx.transaction.message;
-    const accountKeys = message.staticAccountKeys.map((k: PublicKey) => k.toString());
-
-    for (const ix of message.compiledInstructions) {
+    for (const ix of tx.transaction.message.compiledInstructions) {
+      const accountKeys = tx.transaction.message.staticAccountKeys;
       const ixAccounts = ix.accountKeyIndexes.map(
-        (idx: number) => accountKeys[idx],
-      ) as string[];
-
-      const fromBalance = tx.meta?.preBalances?.[ix.accountKeyIndexes[0] as number] ?? 0;
-      const toBalance = tx.meta?.postBalances?.[ix.accountKeyIndexes[1] as number] ?? 0;
+        (idx: number) => accountKeys[idx].toString(),
+      );
 
       if (
         ixAccounts.includes(fromPubkey.toString()) &&
         ixAccounts.includes(toPubkey.toString())
       ) {
-        const solDiff = toBalance - fromBalance;
-        if (solDiff === expectedAmount * 1_000_000) {
-          return true;
+        const preBalances = tx.meta?.preTokenBalances ?? [];
+        const postBalances = tx.meta?.postTokenBalances ?? [];
+
+        for (const pre of preBalances) {
+          if (pre.mint !== getUsdcMint().toBase58()) continue;
+          const post = postBalances.find(
+            (p: any) =>
+              p.accountIndex === pre.accountIndex &&
+              p.mint === pre.mint,
+          );
+          if (!post) continue;
+
+          const preAmount = Number(pre.uiTokenAmount.amount);
+          const postAmount = Number(post.uiTokenAmount.amount);
+          const diff = Math.abs(postAmount - preAmount);
+
+          if (pre.owner === expectedFrom && post.owner === expectedTo) {
+            return diff === expectedAmount;
+          }
         }
       }
     }
@@ -128,100 +408,5 @@ export async function verifyUsdcTransfer(
       error: String(e),
     });
     return false;
-  }
-}
-
-export async function callUpdateScore(
-  poolId: string,
-  memberWallet: string,
-  points: number,
-  eventNonce: string,
-): Promise<string> {
-  try {
-    const prog = getProgram();
-    const [poolPda] = derivePoolPDA(poolId);
-    const [memberPda] = deriveMemberPDA(poolId, memberWallet);
-
-    const sig = await (prog.methods as any)
-      .updateScore(points, eventNonce)
-      .accounts({
-        pool: poolPda,
-        member: memberPda,
-        oracle: getOracleKeypair().publicKey,
-      })
-      .rpc();
-
-    return sig;
-  } catch (e) {
-    logger.error("callUpdateScore failed", {
-      poolId,
-      memberWallet,
-      points,
-      error: String(e),
-    });
-    throw new ApiError(500, "SCORE_UPDATE_FAILED", "Failed to update score on-chain");
-  }
-}
-
-export async function callSettlePool(
-  poolId: string,
-  winnerWallet: string,
-): Promise<string> {
-  try {
-    const prog = getProgram();
-    const [poolPda] = derivePoolPDA(poolId);
-    const [escrowPda] = deriveEscrowPDA(poolId);
-
-    const sig = await (prog.methods as any)
-      .settlePool()
-      .accounts({
-        pool: poolPda,
-        escrow: escrowPda,
-        winner: new PublicKey(winnerWallet),
-        oracle: getOracleKeypair().publicKey,
-        protocolFeeWallet: new PublicKey(env.PROTOCOL_FEE_WALLET),
-      })
-      .rpc();
-
-    return sig;
-  } catch (e) {
-    logger.error("callSettlePool failed", {
-      poolId,
-      winnerWallet,
-      error: String(e),
-    });
-    throw new ApiError(500, "SETTLE_FAILED", "Failed to settle pool on-chain");
-  }
-}
-
-export async function callInitializePool(
-  poolId: string,
-  entryFee: number,
-): Promise<string> {
-  try {
-    const prog = getProgram();
-    const [poolPda] = derivePoolPDA(poolId);
-    const [escrowPda] = deriveEscrowPDA(poolId);
-
-    const sig = await (prog.methods as any)
-      .initializePool(
-        Array.from(uuidToBytes(poolId)),
-        entryFee * 1_000_000,
-      )
-      .accounts({
-        pool: poolPda,
-        escrow: escrowPda,
-        payer: getOracleKeypair().publicKey,
-      })
-      .rpc();
-
-    return sig;
-  } catch (e) {
-    logger.error("callInitializePool failed", {
-      poolId,
-      entryFee,
-      error: String(e),
-    });
-    throw new ApiError(500, "INIT_POOL_FAILED", "Failed to initialize pool on-chain");
   }
 }
