@@ -1,153 +1,127 @@
-# Sweepr — World Cup Sweepstakes, Automated
+# Sweepr — World Cup Sweepstakes
 
-Create a World Cup sweepstakes pool, share a link, and let the smart contract settle the payout. No trust. No spreadsheets. Just vibes.
-
-## Tech Stack
-
-| Layer | Choice |
-|---|---|
-| Framework | Next.js 16 App Router |
-| Database | Supabase (Postgres + RLS) |
-| Cache / Pub-Sub | Upstash Redis |
-| Auth | Solana wallet signature → JWT (jose) |
-| Real-time | Server-Sent Events (SSE) |
-| Jobs | Inngest (cron + scheduled) |
-| Validation | Zod (every input, env var, API response) |
-| Solana | @solana/web3.js + Anchor |
-
-## Local Development
-
-### Prerequisites
-
-- Node.js 20+
-- Supabase CLI (`brew install supabase/tap/supabase`)
-- Upstash account (free tier)
-- Inngest account (free tier)
-- TxLINE API key
-
-### Setup
-
-```bash
-# 1. Install dependencies
-npm install
-
-# 2. Copy env vars
-cp .env.example .env.local
-# Edit .env.local with your Supabase, Upstash, TxLINE, Solana, and Inngest credentials
-
-# 3. Start Supabase locally
-supabase start
-npx supabase migration up
-
-# 4. Start Inngest dev server (separate terminal)
-npx inngest-cli dev
-
-# 5. Start Next.js dev server
-npm run dev
-```
-
-### Environment Variables
-
-See `.env.example` for all required vars. The app will throw a clear error at startup if any are missing.
-
-## API Routes
-
-| Method | Route | Auth | Description |
-|---|---|---|---|
-| POST | `/api/auth/nonce` | No | Request sign-in nonce |
-| POST | `/api/auth/verify` | No | Verify wallet signature, get JWT |
-| POST | `/api/pools` | JWT | Create a pool |
-| GET | `/api/pools/[joinCode]` | No | Get pool details + leaderboard |
-| POST | `/api/pools/[joinCode]/join` | JWT | Join a pool |
-| GET | `/api/pools/[joinCode]/leaderboard` | No | Get leaderboard + recent events |
-| GET | `/api/stream/[poolId]` | No | SSE real-time updates |
-| GET | `/api/teams` | No | All 32 World Cup teams |
-| GET | `/api/fixtures` | No | Fixtures (use `?live=true`) |
-| POST | `/api/internal/score-sync` | Inngest | Process live goals (cron) |
-| POST | `/api/internal/settle` | Inngest | Settle all active pools |
-| GET/POST | `/api/inngest` | Inngest | Inngest serve handler |
-
-## Production Deployment (Vercel)
-
-### Pre-deployment Checklist
-
-1. **Supabase**: Run migration against production database
-   ```bash
-   npx supabase db push
-   ```
-
-2. **Upstash**: Create Redis database, note REST URL + token
-
-3. **Solana**: Deploy Anchor program to mainnet
-   ```bash
-   anchor deploy --provider.cluster mainnet
-   ```
-   Copy the program ID to `SWEEPR_PROGRAM_ID`
-
-4. **Oracle Keypair**: Generate and fund
-   ```bash
-   solana-keygen grind --starts-with oracle:1
-   solana airdrop 1 oracle-keypair.json --url mainnet-beta
-   ```
-   Base58 encode: use `bs58` to encode the secret key bytes
-
-5. **TxLINE**: Obtain API key from TxLINE
-
-6. **Inngest**: Create app in Inngest dashboard, copy signing key + event key
-
-### Deploy
-
-```bash
-# Set all env vars in Vercel project dashboard
-vercel --prod
-# Or: set in Vercel Project Settings → Environment Variables
-```
-
-### Post-deployment
-
-1. Verify `/api/pools` returns 401 without auth
-2. Verify `/api/fixtures` returns real World Cup data
-3. Check Inngest dashboard shows cron function active
-4. Test full flow: create pool → join → verify SSE stream
-
-## Triggering Tournament Settlement Manually
-
-```bash
-curl -X POST https://sweepr.xyz/api/internal/settle \
-  -H "x-inngest-key: $INNGEST_EVENT_KEY"
-```
-
-Or send the Inngest event from the dashboard:
-```
-Event: sweepr/tournament.end
-Data: {}
-```
-
-## Rotating the Oracle Keypair
-
-1. Generate new keypair
-2. Fund it with SOL
-3. Update `SETTLEMENT_KEYPAIR` and `ORACLE_PUBKEY` in env
-4. Redeploy
-
-## Monitoring
-
-| What to watch | Where |
-|---|---|
-| API errors | Vercel Logs → JSON structured logs |
-| Score sync failures | Inngest Dashboard → Runs |
-| Redis cache misses | Upstash Console → Metrics |
-| Supabase slow queries | Supabase Dashboard → Query Performance |
-| On-chain settlement failures | Solana Explorer → Program ID |
+Sweepr is a Solana program that enables friend groups to stake USDC into a pool,
+get randomly assigned World Cup teams, and auto-settle payouts via on-chain escrow.
 
 ## Architecture
 
 ```
-Client → Next.js API Routes → Supabase (pools, members, scores)
-                            → Upstash Redis (cache, rate limits, pub-sub)
-                            → TxLINE (live match data)
-                            → Solana (escrow, settlement)
-                            → Inngest (cron scoring)
-                                  ↓
-                            SSE stream → connected clients
+sweepr/
+├── anchor/                    # Anchor program workspace
+│   ├── programs/sweepr/       # Rust program source
+│   ├── tests/sweepr.ts        # Mocha/Chai test suite
+│   ├── migrations/deploy.ts   # Deployment script
+│   ├── idl/                   # IDL + TypeScript types
+│   ├── Anchor.toml            # Anchor config
+│   └── package.json
+├── lib/solana.ts              # Backend helper (Next.js server)
+├── app/                       # Next.js frontend
+├── components/                # React components
+└── inngest/                   # Background job handlers
 ```
+
+## Instructions
+
+| Instruction | Auth | Description |
+|---|---|---|
+| `initializePool` | Authority | Create a pool (free or paid) |
+| `joinPool` | Member (signer) | Join with USDC stake + team assignment |
+| `updateScore` | Oracle | Update a member's score (idempotent via nonce) |
+| `settlePool` | Oracle | Distribute 95% to winner, 5% protocol fee |
+| `closePool` | Authority | Close a settled pool (refund rent) |
+
+## Fees
+
+- Protocol fee: **5%** (500 bps) of total pool
+- Fee sent to `PROTOCOL_FEE_WALLET` constant
+
+## Local Setup
+
+```bash
+# Prerequisites
+rustup install 1.79.0  # Anchor 0.30 requires Rust <1.80
+solana --version       # >= 1.18
+anchor --version       # 0.31.0 (CLI)
+
+# Install deps
+cd anchor && npm install
+
+# Build program
+NO_DNA=1 anchor build
+
+# Build without IDL (Rust 1.95+ workaround)
+NO_DNA=1 cargo build-sbf --manifest-path programs/sweepr/Cargo.toml
+
+# Run tests (requires localnet)
+NO_DNA=1 anchor test --skip-lint
+```
+
+## Devnet Deployment
+
+```bash
+# 1. Set your deployer keypair
+export ANCHOR_WALLET=~/.config/solana/id.json
+
+# 2. Build
+cd anchor && anchor build
+
+# 3. Deploy
+solana config set --url devnet
+anchor deploy --provider.cluster devnet
+
+# 4. Update anchor/idl/sweepr.json with the deployed program ID
+# 5. Update SWEEPR_PROGRAM_ID in .env
+```
+
+## Mainnet Deployment
+
+1. Build with `anchor build --verifiable` for deterministic builds
+2. Deploy via Squads multisig for upgrade authority
+3. Update constants.rs with production `ORACLE_PUBKEY` and `PROTOCOL_FEE_WALLET`
+4. Verify on [Solana Explorer](https://explorer.solana.com/)
+
+## Rotating ORACLE_PUBKEY
+
+The oracle pubkey is a compile-time constant in `programs/sweepr/src/constants.rs`.
+To rotate:
+
+1. Generate new keypair: `solana-keygen new -o new-oracle.json`
+2. Update `ORACLE_PUBKEY` in constants.rs
+3. Rebuild and redeploy the program
+4. Update `SETTLEMENT_KEYPAIR` in your backend .env
+
+A future upgrade could move this to a config account for runtime rotation.
+
+## Verifying Settlement
+
+To verify a settlement transaction on Solana Explorer:
+
+1. Get the transaction signature from `callSettlePool` response
+2. Open `https://explorer.solana.com/tx/<SIG>?cluster=devnet`
+3. Check the inner instructions for:
+   - Token transfer from escrow vault → winner's ATA (payout)
+   - Token transfer from escrow vault → protocol fee ATA (fee)
+4. Verify amounts: `payout = total - (total * 500 / 10000)`
+
+## Security Assumptions
+
+| Component | Assumption | Risk if violated |
+|---|---|---|
+| Oracle key | Backend signer is secure | Unauthorized score updates, early settlement |
+| USDC mint | Token program integrity | Fake USDC could be deposited |
+| Pool authority | Creator is trusted | Authority can close pool early |
+| On-chain data | All account data is public | Pool states visible on-chain |
+
+## License
+
+MIT
+
+## Risk Notes
+
+- **Signing**: The oracle keypair (`SETTLEMENT_KEYPAIR`) has full authority over
+  `updateScore` and `settlePool`. Compromise = pool theft.
+- **CPI Transfers**: Settlement uses `CpiContext::new_with_signer` with PDA seeds.
+  Ensure the PDA is the escrow authority.
+- **Arithmetic**: All math uses `checked_*` operations to prevent overflow.
+- **Replay Protection**: `updateScore` uses per-event nonces (EventNonce PDA).
+- **Token Program**: Uses standard SPL Token. Token-2022 not yet supported.
