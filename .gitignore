@@ -40,6 +40,10 @@ yarn-error.log*
 # vercel
 .vercel
 
+# anchor
+/anchor/node_modules
+/anchor/target
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
