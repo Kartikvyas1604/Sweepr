@@ -1,5 +1,5 @@
 export type Sweepr = {
-  address: string;
+  address: "G37kRZoauAGXhQLDmEFmhUfRBY7HHMHUq3AQUP6Mz5GP";
   metadata: {
     name: "sweepr";
     version: "0.1.0";
@@ -8,40 +8,153 @@ export type Sweepr = {
   instructions: [
     {
       name: "initializePool";
+      discriminator: [95, 180, 10, 172, 84, 174, 232, 40];
       accounts: [
-        { name: "pool"; writable: true },
-        { name: "escrow"; writable: true },
-        { name: "payer"; writable: true; signer: true },
+        { name: "authority"; writable: true; signer: true },
+        { name: "poolState"; writable: true; pda: { seeds: [{ kind: "const"; value: [112, 111, 111, 108] }, { kind: "arg"; path: "poolId" }] } },
+        { name: "escrowVault"; writable: true },
+        { name: "usdcMint"; writable: false },
+        { name: "tokenProgram"; address: "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA" },
+        { name: "associatedTokenProgram"; address: "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL" },
         { name: "systemProgram"; address: "11111111111111111111111111111111" },
       ];
       args: [
         { name: "poolId"; type: { array: ["u8", 16] } },
-        { name: "entryFee"; type: "u64" },
+        { name: "entryFeeUsdc"; type: "u64" },
+        { name: "maxMembers"; type: "u8" },
+      ];
+    },
+    {
+      name: "joinPool";
+      discriminator: [14, 65, 62, 16, 116, 17, 195, 107];
+      accounts: [
+        { name: "member"; writable: true; signer: true },
+        { name: "poolState"; writable: true },
+        { name: "memberState"; writable: true; pda: { seeds: [{ kind: "const"; value: [109, 101, 109, 98, 101, 114] }, { kind: "arg"; path: "poolId" }, { kind: "account"; path: "member" }] } },
+        { name: "memberUsdcAta"; writable: true; optional: true },
+        { name: "escrowVault"; writable: true; optional: true },
+        { name: "usdcMint"; writable: false },
+        { name: "tokenProgram"; address: "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA" },
+        { name: "associatedTokenProgram"; address: "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL" },
+        { name: "systemProgram"; address: "11111111111111111111111111111111" },
+      ];
+      args: [
+        { name: "poolId"; type: { array: ["u8", 16] } },
+        { name: "teamId"; type: { array: ["u8", 8] } },
       ];
     },
     {
       name: "updateScore";
+      discriminator: [188, 226, 238, 41, 14, 241, 105, 215];
       accounts: [
-        { name: "pool"; writable: true },
-        { name: "member"; writable: true },
-        { name: "oracle"; signer: true },
+        { name: "oracle"; writable: true; signer: true },
+        { name: "poolState"; writable: true },
+        { name: "memberState"; writable: true },
+        { name: "eventNonceAccount"; writable: true; pda: { seeds: [{ kind: "const"; value: [101, 118, 101, 110, 116] }, { kind: "arg"; path: "eventNonce" }] } },
+        { name: "systemProgram"; address: "11111111111111111111111111111111" },
       ];
       args: [
-        { name: "points"; type: "u64" },
-        { name: "nonce"; type: "string" },
+        { name: "poolId"; type: { array: ["u8", 16] } },
+        { name: "wallet"; type: "pubkey" },
+        { name: "points"; type: "u32" },
+        { name: "eventNonce"; type: { array: ["u8", 16] } },
       ];
     },
     {
       name: "settlePool";
+      discriminator: [186, 11, 231, 111, 242, 241, 203, 64];
       accounts: [
-        { name: "pool"; writable: true },
-        { name: "escrow"; writable: true },
-        { name: "winner"; writable: true },
         { name: "oracle"; signer: true },
-        { name: "protocolFeeWallet"; writable: true },
-        { name: "tokenProgram"; address: "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb" },
+        { name: "poolState"; writable: true },
+        { name: "winnerMemberState"; writable: false },
+        { name: "winnerUsdcAta"; writable: true; optional: true },
+        { name: "escrowVault"; writable: true; optional: true },
+        { name: "protocolFeeAta"; writable: true; optional: true },
+        { name: "usdcMint"; writable: false },
+        { name: "tokenProgram"; address: "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA" },
+        { name: "systemProgram"; address: "11111111111111111111111111111111" },
       ];
-      args: [];
+      args: [
+        { name: "poolId"; type: { array: ["u8", 16] } },
+        { name: "winnerWallet"; type: "pubkey" },
+      ];
     },
+    {
+      name: "closePool";
+      discriminator: [140, 189, 209, 23, 239, 62, 239, 11];
+      accounts: [
+        { name: "authority"; writable: true; signer: true },
+        { name: "poolState"; writable: true },
+        { name: "systemProgram"; address: "11111111111111111111111111111111" },
+      ];
+      args: [
+        { name: "poolId"; type: { array: ["u8", 16] } },
+      ];
+    },
+  ];
+  accounts: [
+    {
+      name: "PoolState";
+      discriminator: [247, 237, 227, 245, 215, 195, 222, 70];
+      type: {
+        kind: "struct";
+        fields: [
+          { name: "poolId"; type: { array: ["u8", 16] } },
+          { name: "authority"; type: "pubkey" },
+          { name: "status"; type: { defined: { name: "PoolStatus" } } },
+          { name: "entryFeeUsdc"; type: "u64" },
+          { name: "totalStaked"; type: "u64" },
+          { name: "memberCount"; type: "u8" },
+          { name: "maxMembers"; type: "u8" },
+          { name: "winner"; type: { option: "pubkey" } },
+          { name: "createdAt"; type: "i64" },
+          { name: "settledAt"; type: { option: "i64" } },
+          { name: "bump"; type: "u8" },
+        ];
+      };
+    },
+    {
+      name: "MemberState";
+      discriminator: [41, 28, 21, 90, 91, 49, 228, 104];
+      type: {
+        kind: "struct";
+        fields: [
+          { name: "pool"; type: "pubkey" },
+          { name: "wallet"; type: "pubkey" },
+          { name: "teamId"; type: { array: ["u8", 8] } },
+          { name: "score"; type: "u32" },
+          { name: "joinedAt"; type: "i64" },
+          { name: "hasStaked"; type: "bool" },
+          { name: "bump"; type: "u8" },
+        ];
+      };
+    },
+    {
+      name: "EventNonce";
+      discriminator: [253, 74, 72, 24, 77, 67, 176, 126];
+      type: {
+        kind: "struct";
+        fields: [
+          { name: "nonce"; type: { array: ["u8", 16] } },
+          { name: "processedAt"; type: "i64" },
+          { name: "bump"; type: "u8" },
+        ];
+      };
+    },
+  ];
+  errors: [
+    { code: 6000; name: "PoolFull"; msg: "Pool has reached maximum member capacity" },
+    { code: 6001; name: "AlreadyJoined"; msg: "Wallet has already joined this pool" },
+    { code: 6002; name: "PoolNotJoinable"; msg: "Pool is not in a joinable state (must be Waiting or Active)" },
+    { code: 6003; name: "PoolNotActive"; msg: "Pool is not currently active" },
+    { code: 6004; name: "PoolNotSettled"; msg: "Pool has not been settled yet" },
+    { code: 6005; name: "InvalidWinner"; msg: "Winner wallet is not a valid member of this pool" },
+    { code: 6006; name: "InsufficientStake"; msg: "Insufficient USDC stake provided" },
+    { code: 6007; name: "InvalidMaxMembers"; msg: "Maximum members must be between 2 and 32" },
+    { code: 6008; name: "InvalidEntryFee"; msg: "Entry fee must be 0 (free) or at least 1 USDC (1_000_000 micro-units)" },
+    { code: 6009; name: "Unauthorized"; msg: "Signer is not authorized for this action" },
+    { code: 6010; name: "EventAlreadyProcessed"; msg: "This event has already been processed" },
+    { code: 6011; name: "EscrowEmpty"; msg: "Escrow vault is unexpectedly empty" },
+    { code: 6012; name: "ArithmeticOverflow"; msg: "Arithmetic operation overflowed" },
   ];
 };
