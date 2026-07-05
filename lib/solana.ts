@@ -19,6 +19,7 @@ import {
   getOrCreateAssociatedTokenAccount,
 } from "@solana/spl-token";
 import bs58 from "bs58";
+import crypto from "crypto";
 import { env } from "./env";
 import { logger } from "./logger";
 import { ApiError } from "./errors";
@@ -105,28 +106,37 @@ export function deriveMemberPDA(
   );
 }
 
+// FIX: escrow vault is an ATA of the pool PDA (authority = pool_state), not a separate PDA.
+// The Anchor program creates it via associated_token::authority = pool_state.
 export function deriveEscrowPDA(poolId: string): [PublicKey, number] {
-  return PublicKey.findProgramAddressSync(
-    [Buffer.from("escrow"), uuidToBytes(poolId)],
-    new PublicKey(env.SWEEPR_PROGRAM_ID),
-  );
+  const ata = deriveEscrowATA(poolId);
+  // Return PublicKey as first element, 0 as bump (ATAs don't have bumps in this context)
+  return [ata, 0] as [PublicKey, number];
 }
 
-export function deriveEventNoncePDA(
-  eventNonce: string,
-): [PublicKey, number] {
-  return PublicKey.findProgramAddressSync(
-    [Buffer.from("event"), Buffer.from(eventNonce, "hex")],
-    new PublicKey(env.SWEEPR_PROGRAM_ID),
-  );
-}
-
-export async function getEscrowAta(poolId: string): Promise<PublicKey> {
+export function deriveEscrowATA(poolId: string): PublicKey {
   const [poolPda] = derivePoolPDA(poolId);
   return anchorUtils.token.associatedAddress({
     mint: getUsdcMint(),
     owner: poolPda,
   });
+}
+
+export function deriveEventNoncePDA(
+  eventNonce: string,
+): [PublicKey, number] {
+  // FIX: eventNonce could be an arbitrary string (like TxLINE event ID 'evt_001'), so we must hash it to a 16-byte hex string (32 characters) using MD5 to avoid buffer length/decoding errors.
+  const hex = eventNonce.length === 32 && /^[0-9a-fA-F]+$/.test(eventNonce)
+    ? eventNonce
+    : crypto.createHash("md5").update(eventNonce).digest("hex");
+  return PublicKey.findProgramAddressSync(
+    [Buffer.from("event"), Buffer.from(hex, "hex")],
+    new PublicKey(env.SWEEPR_PROGRAM_ID),
+  );
+}
+
+export async function getEscrowAta(poolId: string): Promise<PublicKey> {
+  return deriveEscrowATA(poolId);
 }
 
 export async function callInitializePool(
@@ -137,7 +147,7 @@ export async function callInitializePool(
   try {
     const prog = getProgram();
     const [poolPda] = derivePoolPDA(poolId);
-    const escrowAta = await getEscrowAta(poolId);
+    const escrowAta = deriveEscrowATA(poolId);
     const usdcMint = getUsdcMint();
 
     const sig = await (prog.methods as any)
@@ -244,12 +254,19 @@ export async function callUpdateScore(
     const [memberPda] = deriveMemberPDA(poolId, memberWallet);
     const [eventNoncePda] = deriveEventNoncePDA(eventNonce);
 
+    // FIX: Compute the 16-byte nonce seed once and reuse for both the PDA
+    // derivation and the program instruction arg so they always match.
+    const nonceHex = eventNonce.length === 32 && /^[0-9a-fA-F]+$/.test(eventNonce)
+      ? eventNonce
+      : crypto.createHash("md5").update(eventNonce).digest("hex");
+    const nonceBytes = Array.from(Buffer.from(nonceHex, "hex"));
+
     const sig = await (prog.methods as any)
       .updateScore(
         Array.from(uuidToBytes(poolId)),
         new PublicKey(memberWallet),
         points,
-        Array.from(Buffer.from(eventNonce, "hex")),
+        nonceBytes,
       )
       .accounts({
         oracle: getOracleKeypair().publicKey,
@@ -409,14 +426,10 @@ export async function buildJoinPoolTx(
   const [poolPda] = derivePoolPDAWithProgramId(poolId, programId);
   const [memberPda] = deriveMemberPDAWithProgramId(poolId, memberPubkey.toBase58(), programId);
 
-  const escrowPda = PublicKey.findProgramAddressSync(
-    [Buffer.from("escrow"), uuidToBytes(poolId)],
-    programId,
-  )[0];
-
+  // FIX: escrow vault is an ATA of pool_state, not a separate PDA
   const escrowAta = anchorUtils.token.associatedAddress({
     mint: usdcMint,
-    owner: escrowPda,
+    owner: poolPda,
   });
 
   const pool = await (prog.account as any).poolState.fetch(poolPda);
@@ -516,39 +529,41 @@ export async function verifyUsdcTransfer(
 
     if (!tx) return false;
 
-    const fromPubkey = new PublicKey(expectedFrom);
-    const toPubkey = new PublicKey(expectedTo);
+    const preBalances = tx.meta?.preTokenBalances ?? [];
+    const postBalances = tx.meta?.postTokenBalances ?? [];
 
-    for (const ix of tx.transaction.message.compiledInstructions) {
-      const accountKeys = tx.transaction.message.staticAccountKeys;
-      const ixAccounts = ix.accountKeyIndexes.map(
-        (idx: number) => accountKeys[idx].toString(),
+    // FIX: pre/post token balances use accountIndex (position in the tx account list),
+    // not wallet addresses. We need to match by accountIndex and check that the
+    // token account owner matches expectedFrom/expectedTo.
+    for (const pre of preBalances) {
+      if (pre.mint !== getUsdcMint().toBase58()) continue;
+
+      const post = postBalances.find(
+        (p: any) =>
+          p.accountIndex === pre.accountIndex &&
+          p.mint === pre.mint,
       );
+      if (!post) continue;
 
-      if (
-        ixAccounts.includes(fromPubkey.toString()) &&
-        ixAccounts.includes(toPubkey.toString())
-      ) {
-        const preBalances = tx.meta?.preTokenBalances ?? [];
-        const postBalances = tx.meta?.postTokenBalances ?? [];
+      const preAmount = Number(pre.uiTokenAmount.amount);
+      const postAmount = Number(post.uiTokenAmount.amount);
 
-        for (const pre of preBalances) {
-          if (pre.mint !== getUsdcMint().toBase58()) continue;
-          const post = postBalances.find(
-            (p: any) =>
-              p.accountIndex === pre.accountIndex &&
-              p.mint === pre.mint,
-          );
-          if (!post) continue;
+      // Token account owner didn't change in a transfer — the token account itself
+      // is an ATA owned by the user or escrow. Check that the token account owner
+      // is one of our expected addresses.
+      const owner = pre.owner;
+      if (owner !== expectedFrom && owner !== expectedTo) continue;
 
-          const preAmount = Number(pre.uiTokenAmount.amount);
-          const postAmount = Number(post.uiTokenAmount.amount);
-          const diff = Math.abs(postAmount - preAmount);
+      const diff = Math.abs(postAmount - preAmount);
+      // The difference must be exactly the entry fee (in micro-units, 6 decimals)
+      const expectedMicroUnits = Math.round(expectedAmount * 1_000_000);
+      if (diff === expectedMicroUnits) {
+        return true;
+      }
 
-          if (pre.owner === expectedFrom && post.owner === expectedTo) {
-            return diff === expectedAmount;
-          }
-        }
+      // Also check raw amount (if expectedAmount is already in micro-units)
+      if (diff === expectedAmount) {
+        return true;
       }
     }
 

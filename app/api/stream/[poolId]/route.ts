@@ -54,7 +54,8 @@ export async function GET(
               ),
             );
 
-            await new Promise((r) => setTimeout(r, 3000));
+            // FIX: heartbeat every 25s matches Vercel's idle timeout
+            await new Promise((r) => setTimeout(r, 25000));
           }
         };
 

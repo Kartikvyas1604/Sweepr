@@ -1,9 +1,8 @@
 import { env } from "./env";
-import { redis, cacheGet, cacheSet } from "./redis";
+import { cacheGet, cacheSet } from "./redis";
 import { ApiError } from "./errors";
 import { logger } from "./logger";
 import {
-  TxLINETeamSchema,
   TxLINEFixtureSchema,
   TxLINEEventSchema,
   TxLINEStandingsSchema,
@@ -36,6 +35,8 @@ async function fetchFromTxLINE<T>(
       Authorization: `Bearer ${apiKey}`,
       Accept: "application/json",
     },
+    // FIX: Added AbortSignal.timeout to prevent hanging on slow TxLINE responses
+    signal: AbortSignal.timeout(5000),
   });
 
   if (!response.ok) {

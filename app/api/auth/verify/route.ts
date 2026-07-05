@@ -40,7 +40,15 @@ export async function POST(request: Request) {
 
     const signatureValid = await verifyWalletSignature(wallet, signature, nonce);
     if (!signatureValid) {
-      logger.warn("Signature verification failed — issuing limited token", { wallet });
+      logger.warn("Signature verification failed", { wallet });
+      return Response.json(
+        {
+          error: "Invalid signature — you must sign the message with your wallet's private key",
+          code: "INVALID_SIGNATURE",
+          status: 401,
+        },
+        { status: 401 },
+      );
     }
 
     const token = await issueJWT(wallet);

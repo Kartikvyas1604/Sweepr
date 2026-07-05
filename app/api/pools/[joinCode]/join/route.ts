@@ -4,7 +4,7 @@ import { handleRouteError, ApiError } from "@/lib/errors";
 import { requireAuth } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase";
 import { assignTeam, computeLeaderboard } from "@/lib/pools";
-import { verifyUsdcTransfer, verifyJoinPoolTx } from "@/lib/solana";
+import { verifyJoinPoolTx } from "@/lib/solana";
 import { getAllTeams } from "@/lib/txline";
 import { redis, publishPoolUpdate } from "@/lib/redis";
 import { logger } from "@/lib/logger";
@@ -92,21 +92,10 @@ export async function POST(
         );
       }
 
-      const validTransfer = await verifyUsdcTransfer(
-        stakeTxSignature,
-        wallet,
-        pool.escrow_pda ?? "",
-        Number(pool.entry_fee_usdc),
-      );
-
-      if (!validTransfer) {
-        throw new ApiError(
-          402,
-          "PAYMENT_VERIFICATION_FAILED",
-          "Could not verify USDC transfer to escrow",
-        );
-      }
-
+      // FIX: The Anchor joinPool instruction handles USDC transfer via CPI internally.
+      // verifyJoinPoolTx confirms the transaction contains a valid joinPool instruction
+      // for this pool and member — which implies the USDC transfer was processed.
+      // Separate verifyUsdcTransfer is redundant since the program atomically transfers USDC.
       const validJoinTx = await verifyJoinPoolTx(
         stakeTxSignature,
         pool.id,

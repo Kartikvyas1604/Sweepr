@@ -1,6 +1,7 @@
 import { ZodError } from "zod";
 import { logger } from "./logger";
 import { corsHeaders } from "./cors";
+}
 
 export class ApiError extends Error {
   constructor(

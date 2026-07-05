@@ -78,14 +78,10 @@ export async function buildJoinPoolTx(
     programId,
   );
 
-  const escrowPda = PublicKey.findProgramAddressSync(
-    [enc("escrow"), uuidToBytes(poolId)],
-    programId,
-  )[0];
-
+  // FIX: escrow vault is an ATA of pool_state (the pool PDA), not a separate PDA
   const escrowAta = anchorUtils.token.associatedAddress({
     mint: usdcMint,
-    owner: escrowPda,
+    owner: poolPda,
   });
 
   const pool = await (prog.account as any).poolState.fetch(poolPda);

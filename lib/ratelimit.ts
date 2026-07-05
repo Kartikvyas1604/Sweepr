@@ -14,10 +14,11 @@ export async function withRateLimit(
   window: "1m" | "5m" | "1h",
   identifier?: string,
 ): Promise<RateLimitResult> {
+  // FIX: rate limiting was reading x-forwarded-for first which could be easily spoofed by rotating headers. Use x-real-ip as primary, fall back to first x-forwarded-for entry.
   const ip =
     identifier ??
+    request.headers.get("x-real-ip")?.trim() ??
     request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
-    request.headers.get("x-real-ip") ??
     "unknown";
 
   try {
