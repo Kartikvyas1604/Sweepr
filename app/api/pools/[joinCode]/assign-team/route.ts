@@ -7,6 +7,8 @@ import { teamIdToBytes } from "@/lib/solana";
 import { redis } from "@/lib/redis";
 import { logger } from "@/lib/logger";
 
+export const dynamic = "force-dynamic";
+
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ joinCode: string }> },
@@ -27,8 +29,8 @@ export async function POST(
       throw new ApiError(404, "POOL_NOT_FOUND", "Pool not found");
     }
 
-    if (pool.status === "settled") {
-      throw new ApiError(409, "POOL_SETTLED", "This pool has already been settled");
+    if (pool.status === "settled" || pool.status === "onchain_failed") {
+      throw new ApiError(409, "POOL_SETTLED", "This pool has already been settled or failed");
     }
 
     const { count: memberCount } = await supabaseAdmin
@@ -51,43 +53,58 @@ export async function POST(
       throw new ApiError(409, "ALREADY_JOINED", "You have already joined this pool");
     }
 
-    const assignedTeam = await assignTeam(pool.id);
+    // Acquire a per-pool Redis lock to serialize team assignments
+    const lockKey = `lock:assign-team:${pool.id}`;
+    const lockAcquired = await redis.set(lockKey, wallet, {
+      ex: 10,
+      nx: true,
+    });
 
-    const tempToken = crypto.randomUUID();
-    await redis.set(
-      `join:temp:${tempToken}`,
-      JSON.stringify({
-        poolId: pool.id,
+    if (!lockAcquired) {
+      throw new ApiError(429, "TOO_MANY_REQUESTS", "Another team assignment is in progress for this pool. Please try again.");
+    }
+
+    try {
+      const assignedTeam = await assignTeam(pool.id);
+
+      const tempToken = crypto.randomUUID();
+      await redis.set(
+        `join:temp:${tempToken}`,
+        JSON.stringify({
+          poolId: pool.id,
+          wallet,
+          joinCode,
+          teamId: assignedTeam.id,
+          teamName: assignedTeam.name,
+          teamFlagUrl: assignedTeam.flagUrl,
+          group: assignedTeam.group,
+          displayName: null,
+        }),
+        { ex: 600 },
+      );
+
+      logger.info("Team assigned (pending join)", {
         wallet,
-        joinCode,
+        poolId: pool.id,
         teamId: assignedTeam.id,
-        teamName: assignedTeam.name,
-        teamFlagUrl: assignedTeam.flagUrl,
-        group: assignedTeam.group,
-        displayName: null,
-      }),
-      { ex: 600 },
-    );
+        tempToken,
+      });
 
-    logger.info("Team assigned (pending join)", {
-      wallet,
-      poolId: pool.id,
-      teamId: assignedTeam.id,
-      tempToken,
-    });
-
-    return Response.json({
-      tempToken,
-      team: {
-        id: assignedTeam.id,
-        name: assignedTeam.name,
-        shortName: assignedTeam.shortName,
-        flagUrl: assignedTeam.flagUrl,
-        group: assignedTeam.group,
-      },
-      teamIdBytes: teamIdToBytes(assignedTeam.id),
-      entryFeeUsdc: Number(pool.entry_fee_usdc),
-    });
+      return Response.json({
+        tempToken,
+        team: {
+          id: assignedTeam.id,
+          name: assignedTeam.name,
+          shortName: assignedTeam.shortName,
+          flagUrl: assignedTeam.flagUrl,
+          group: assignedTeam.group,
+        },
+        teamIdBytes: teamIdToBytes(assignedTeam.id),
+        entryFeeUsdc: Number(pool.entry_fee_usdc),
+      });
+    } finally {
+      await redis.del(lockKey).catch(() => {});
+    }
   } catch (e) {
     return handleRouteError(e);
   }

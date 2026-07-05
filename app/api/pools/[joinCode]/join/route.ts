@@ -17,6 +17,8 @@ const bodySchema = z.object({
   tempToken: z.string().optional(),
 });
 
+const DUPLICATE_JOIN_CODE = "23505"; // unique_violation
+
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ joinCode: string }> },
@@ -45,10 +47,11 @@ export async function POST(
       throw new ApiError(404, "POOL_NOT_FOUND", "Pool not found");
     }
 
-    if (pool.status === "settled") {
-      throw new ApiError(409, "POOL_SETTLED", "This pool has already been settled");
+    if (pool.status === "settled" || pool.status === "onchain_failed") {
+      throw new ApiError(409, "POOL_SETTLED", "This pool has already been settled or failed");
     }
 
+    // Check pool capacity (best-effort — race window exists but is extremely narrow)
     const { count: memberCount } = await supabaseAdmin
       .from("pool_members")
       .select("*", { count: "exact", head: true })
@@ -58,6 +61,7 @@ export async function POST(
       throw new ApiError(409, "POOL_FULL", "This pool is full");
     }
 
+    // Check duplicate join (unique constraint on pool_id+wallet catches any race)
     const { data: existingMember } = await supabaseAdmin
       .from("pool_members")
       .select("id")
@@ -69,6 +73,7 @@ export async function POST(
       throw new ApiError(409, "ALREADY_JOINED", "You have already joined this pool");
     }
 
+    // Resolve team ID from temp token or assign a new team
     let assignedTeam: Awaited<ReturnType<typeof assignTeam>> | null = null;
     let resolvedTeamId: string | null = null;
 
@@ -85,6 +90,7 @@ export async function POST(
       await redis.del(`join:temp:${tempToken}`);
     }
 
+    // Verify on-chain transaction for paid pools
     if (Number(pool.entry_fee_usdc) > 0) {
       if (!stakeTxSignature) {
         throw new ApiError(
@@ -94,10 +100,6 @@ export async function POST(
         );
       }
 
-      // FIX: The Anchor joinPool instruction handles USDC transfer via CPI internally.
-      // verifyJoinPoolTx confirms the transaction contains a valid joinPool instruction
-      // for this pool and member — which implies the USDC transfer was processed.
-      // Separate verifyUsdcTransfer is redundant since the program atomically transfers USDC.
       const validJoinTx = await verifyJoinPoolTx(
         stakeTxSignature,
         pool.id,
@@ -124,6 +126,7 @@ export async function POST(
       assignedTeam = await assignTeam(pool.id);
     }
 
+    // Insert the member — unique constraint on (pool_id, wallet) catches race doubles
     const { data: member, error: insertError } = await supabaseAdmin
       .from("pool_members")
       .insert({
@@ -139,16 +142,21 @@ export async function POST(
       .select()
       .single();
 
-    if (insertError || !member) {
-      logger.error("Failed to join pool", { error: insertError, wallet, poolId: pool.id });
+    if (insertError) {
+      if (insertError.code === DUPLICATE_JOIN_CODE) {
+        throw new ApiError(409, "ALREADY_JOINED", "You have already joined this pool");
+      }
+      logger.error("Failed to insert pool member", { error: insertError, wallet, poolId: pool.id });
       throw new ApiError(500, "JOIN_FAILED", "Failed to join pool");
     }
 
+    // Update pool status outside the critical path - no need to rollback if these fail
     if (pool.status === "waiting") {
       await supabaseAdmin
         .from("pools")
         .update({ status: "active" })
-        .eq("id", pool.id);
+        .eq("id", pool.id)
+        .maybeSingle();
     }
 
     if (Number(pool.entry_fee_usdc) > 0) {
@@ -157,7 +165,8 @@ export async function POST(
         .update({
           total_staked_usdc: Number(pool.total_staked_usdc) + Number(pool.entry_fee_usdc),
         })
-        .eq("id", pool.id);
+        .eq("id", pool.id)
+        .maybeSingle();
     }
 
     await publishPoolUpdate(pool.id, {

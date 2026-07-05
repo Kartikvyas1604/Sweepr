@@ -63,7 +63,7 @@ export async function POST(request: Request) {
         .select("nonce")
         .eq("pool_id", pool.id);
 
-      const processedNonces = new Set(nonceRows?.map((n) => n.nonce) ?? []);
+      const processedNonces = new Set(nonceRows?.map((n: any) => n.nonce) ?? []);
 
       for (const fixture of liveFixtures) {
         const events = await getFixtureEvents(fixture.id);
@@ -135,22 +135,31 @@ export async function POST(request: Request) {
             },
           });
 
-          callUpdateScore(pool.id, result.wallet, result.points, result.eventId).catch(
-            (e: Error) => {
-              logger.warn("On-chain score update failed (non-blocking)", {
-                poolId: pool.id,
-                eventId: result.eventId,
-                error: String(e),
-              });
-            },
-          );
-
+          // Attempt on-chain score update. If it fails, enqueue a retry.
           try {
-            await supabaseAdmin
-              .from("processed_nonces")
-              .insert({ nonce: result.eventId, pool_id: pool.id });
-          } catch {
+            await callUpdateScore(pool.id, result.wallet, result.points, result.eventId);
+          } catch (e) {
+            logger.warn("On-chain score update failed, enqueuing retry", {
+              poolId: pool.id,
+              eventId: result.eventId,
+              error: String(e),
+            });
+            await supabaseAdmin.from("onchain_retry_queue").insert({
+              action: "update_score",
+              pool_id: pool.id,
+              payload: {
+                memberWallet: result.wallet,
+                points: result.points,
+                eventNonce: result.eventId,
+              },
+              next_retry_at: new Date(Date.now() + 30000).toISOString(), // 30s delay
+            }).maybeSingle();
           }
+
+          await supabaseAdmin
+            .from("processed_nonces")
+            .insert({ nonce: result.eventId, pool_id: pool.id })
+            .maybeSingle();
 
           totalEventsProcessed++;
           totalNewGoals++;

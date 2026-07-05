@@ -1,7 +1,6 @@
 import { z } from "zod";
 import { withRateLimit } from "@/lib/ratelimit";
-import { handleRouteError } from "@/lib/errors";
-import { ApiError } from "@/lib/errors";
+import { handleRouteError, ApiError } from "@/lib/errors";
 import { requireAuth } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase";
 import { generateJoinCode } from "@/lib/pools";
@@ -43,7 +42,12 @@ export async function GET(request: Request) {
       throw new ApiError(500, "POOLS_LIST_FAILED", "Failed to list pools");
     }
 
-    const poolIdsToCount = (pools ?? []).map((p) => p.id);
+    // Only show pools that aren't in a terminal failure state unless the user created them
+    const visiblePools = (pools ?? []).filter(
+      (p) => p.status !== "onchain_failed" || p.created_by === wallet,
+    );
+
+    const poolIdsToCount = visiblePools.map((p) => p.id);
     const { data: allMembers } = poolIdsToCount.length > 0
       ? await supabaseAdmin
           .from("pool_members")
@@ -63,7 +67,7 @@ export async function GET(request: Request) {
     }
 
     return Response.json({
-      pools: (pools ?? []).map((pool) => {
+      pools: visiblePools.map((pool) => {
         const myMember = memberByPoolId.get(pool.id)?.[0];
         return {
           id: pool.id,
@@ -129,6 +133,7 @@ export async function POST(request: Request) {
       escrowPda = pda.toString();
     }
 
+    // Insert pool with "pending_onchain" status for paid pools
     const { data: pool, error } = await supabaseAdmin
       .from("pools")
       .insert({
@@ -139,6 +144,7 @@ export async function POST(request: Request) {
         entry_fee_usdc: entryFeeUsdc,
         max_members: maxMembers,
         escrow_pda: escrowPda,
+        status: entryFeeUsdc > 0 ? "pending_onchain" : "waiting",
       })
       .select()
       .single();
@@ -148,13 +154,23 @@ export async function POST(request: Request) {
       throw new ApiError(500, "POOL_CREATE_FAILED", "Failed to create pool");
     }
 
+    // For paid pools, initialize on-chain before marking as ready
     if (entryFeeUsdc > 0) {
-      callInitializePool(poolId, entryFeeUsdc, maxMembers).catch((e) => {
-        logger.warn("On-chain pool init failed (non-blocking)", {
-          poolId,
-          error: String(e),
-        });
-      });
+      try {
+        await callInitializePool(poolId, entryFeeUsdc, maxMembers);
+        await supabaseAdmin
+          .from("pools")
+          .update({ status: "waiting" })
+          .eq("id", poolId);
+        pool.status = "waiting";
+      } catch (e) {
+        await supabaseAdmin
+          .from("pools")
+          .update({ status: "onchain_failed" })
+          .eq("id", poolId);
+        pool.status = "onchain_failed";
+        throw new ApiError(500, "INIT_POOL_FAILED", "Failed to initialize pool on-chain. Please try again.");
+      }
     }
 
     await publishPoolUpdate(pool.id, {
