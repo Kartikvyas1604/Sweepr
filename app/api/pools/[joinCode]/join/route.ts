@@ -9,6 +9,8 @@ import { getAllTeams } from "@/lib/txline";
 import { redis, publishPoolUpdate } from "@/lib/redis";
 import { logger } from "@/lib/logger";
 
+export const dynamic = "force-dynamic";
+
 const bodySchema = z.object({
   displayName: z.string().min(1).max(40),
   stakeTxSignature: z.string().optional(),

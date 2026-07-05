@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { Bricolage_Grotesque, Inter, JetBrains_Mono } from "next/font/google";
 import { WalletProvider } from "@/components/wallet-provider";
+import { SpeedInsights } from "@vercel/speed-insights/next";
+import { Analytics } from "@vercel/analytics/react";
 import "./globals.css";
 
 const bricolage = Bricolage_Grotesque({
@@ -36,7 +38,11 @@ export default function RootLayout({
       className={`${bricolage.variable} ${inter.variable} ${jetbrainsMono.variable}`}
     >
       <body className="min-h-dvh antialiased">
-        <WalletProvider>{children}</WalletProvider>
+        <WalletProvider>
+          {children}
+          <SpeedInsights />
+          <Analytics />
+        </WalletProvider>
       </body>
     </html>
   );

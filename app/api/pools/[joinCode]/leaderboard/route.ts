@@ -6,6 +6,8 @@ import { cacheGet, cacheSet } from "@/lib/redis";
 import { z } from "zod";
 import type { ScoreEventFeed } from "@/types/api";
 
+export const dynamic = "force-dynamic";
+
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ joinCode: string }> },
