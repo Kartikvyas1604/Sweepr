@@ -100,9 +100,17 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     if (resolve) resolve(detected.provider);
   }, []);
 
-  const getWalletProvider = useCallback(async (): Promise<any> => {
+  const getWalletProvider = useCallback(async (expectedAddress?: string | null): Promise<any> => {
     const storedId = getStoredWalletId();
-    if (storedId && providerRef.current) return providerRef.current;
+    if (storedId && providerRef.current) {
+      // Verify the stored provider matches the expected address — if not, force
+      // re-selection (handles case where user switched wallets between sessions)
+      if (expectedAddress && providerRef.current.publicKey?.toBase58() !== expectedAddress) {
+        providerRef.current = null;
+      } else {
+        return providerRef.current;
+      }
+    }
     return new Promise((resolve) => {
       pendingResolveRef.current = resolve;
       setSelectorOpen(true);
@@ -112,11 +120,18 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const ensureAuth = useCallback(async () => {
     const existing = getToken();
     if (existing) return;
-    const provider = await getWalletProvider();
-    const connectResult = await provider.connect();
-    const wallet = connectResult.publicKey.toBase58();
-    setAddress(wallet);
-    storeWallet(wallet);
+    const provider = await getWalletProvider(address);
+    // Don't call provider.connect() again if we're already connected — use the
+    // current address. Re-connecting can bring up the wrong wallet extension
+    // when multiple wallets (Phantom, BagPack) are installed.
+    let wallet = address;
+    if (!wallet) {
+      const connectResult = await provider.connect();
+      wallet = connectResult.publicKey.toBase58();
+      setAddress(wallet);
+      storeWallet(wallet);
+    }
+    if (!wallet) throw new Error("No wallet address available");
     try {
       await doAuth(provider, wallet);
       const jwt = getToken();
@@ -125,14 +140,14 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       console.error("[ensureAuth] doAuth failed:", e?.message ?? e);
       throw e;
     }
-  }, [getWalletProvider, doAuth]);
+  }, [getWalletProvider, doAuth, address]);
 
   const connect = useCallback(async () => {
     if (connectingRef.current) return;
     connectingRef.current = true;
     setConnecting(true);
     try {
-      const provider = await getWalletProvider();
+      const provider = await getWalletProvider(address);
       const { publicKey } = await provider.connect();
       const wallet = publicKey.toBase58();
       setAddress(wallet);
