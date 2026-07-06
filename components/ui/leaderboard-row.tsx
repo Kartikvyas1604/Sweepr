@@ -75,7 +75,11 @@ function LeaderboardRow({
 
       {/* Flag + Name */}
       <div className="flex min-w-0 flex-1 items-center gap-3">
-        <span className="text-lg">{participant.team.flag}</span>
+        {participant.team.flag?.startsWith("http") ? (
+          <img src={participant.team.flag} alt="" className="h-6 w-8 rounded-sm object-cover" />
+        ) : (
+          <span className="text-lg">{participant.team.flag || "🏳️"}</span>
+        )}
         <div className="min-w-0">
           <p
             className={cn(

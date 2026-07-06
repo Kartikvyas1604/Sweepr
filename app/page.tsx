@@ -9,8 +9,9 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { TopNav } from "@/components/ui/top-nav";
 import { WalletButton } from "@/components/ui/wallet-button";
 import { useWallet } from "@/components/wallet-provider";
-import { api } from "@/lib/api-client";
+import { api, ApiClientError } from "@/lib/api-client";
 import {
+  AlertCircle,
   ArrowRight,
   Users,
   Trophy,
@@ -43,17 +44,24 @@ export default function Home() {
   const [entryFee, setEntryFee] = useState("");
   const [isPrivate, setIsPrivate] = useState(false);
   const [passphrase, setPassphrase] = useState("");
+  const [error, setError] = useState<string | null>(null);
 
   async function handleCreate() {
     if (!connected) return;
-    const fee = parseFloat(entryFee);
-    if (!poolName || !fee || fee <= 0) return;
+    const fee = entryFee === "" ? 0 : parseFloat(entryFee);
+    if (!poolName) return;
+    if (isNaN(fee) || fee < 0) return;
+    setError(null);
     try {
       await ensureAuth();
       const result = await api.pools.create(poolName, fee);
       router.push(`/pool/${result.pool.joinCode}`);
-    } catch {
-      // silently fail — user can retry
+    } catch (e) {
+      if (e instanceof ApiClientError) {
+        setError(e.message);
+      } else {
+        setError(e instanceof Error ? e.message : "Failed to create pool");
+      }
     }
   }
 
@@ -201,10 +209,17 @@ export default function Home() {
                   </motion.div>
                 )}
 
+                {error && (
+                  <div className="flex items-center gap-2 rounded-md bg-accent/10 px-3 py-2">
+                    <AlertCircle className="h-3.5 w-3.5 shrink-0 text-accent" />
+                    <p className="font-mono text-[11px] text-accent">{error}</p>
+                  </div>
+                )}
+
                 <Button
                   size="lg"
                   className="w-full"
-                  disabled={!connected || !poolName || !entryFee || parseFloat(entryFee) <= 0}
+                  disabled={!connected || !poolName || (entryFee !== "" && parseFloat(entryFee) < 0)}
                   onClick={handleCreate}
                 >
                   {connected ? "Create Pool" : "Connect Wallet to Create"}

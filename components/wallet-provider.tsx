@@ -10,7 +10,7 @@ import {
   type ReactNode,
 } from "react";
 import bs58 from "bs58";
-import { api, setToken, clearToken } from "@/lib/api-client";
+import { api, setToken, getToken, clearToken } from "@/lib/api-client";
 import { WalletSelector, type DetectedWallet } from "./wallet-selector";
 
 interface WalletContextValue {
@@ -53,11 +53,6 @@ function storeWalletId(id: string | null) {
   else localStorage.removeItem("sweepr_wallet_id");
 }
 
-export function getToken(): string | null {
-  if (typeof window === "undefined") return null;
-  return localStorage.getItem("sweepr_jwt");
-}
-
 async function signWithProvider(provider: any, message: string): Promise<string | null> {
   const encoded = new TextEncoder().encode(message);
   let result: any;
@@ -92,8 +87,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     const { nonce, message } = await api.auth.requestNonce(wallet);
     const sigEncoded = await signWithProvider(provider, message);
     const signature = sigEncoded ?? "";
-    const { token } = await api.auth.verify(wallet, signature, nonce);
-    if (token) setToken(token);
+    const { token, expiresAt } = await api.auth.verify(wallet, signature, nonce);
+    if (token) setToken(token, expiresAt);
   }, []);
 
   const handleWalletSelect = useCallback(async (detected: DetectedWallet) => {

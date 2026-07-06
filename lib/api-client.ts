@@ -2,15 +2,27 @@ const API_BASE = "";
 
 function getToken(): string | null {
   if (typeof window === "undefined") return null;
-  return localStorage.getItem("sweepr_jwt");
+  const token = localStorage.getItem("sweepr_jwt");
+  const expiresAt = localStorage.getItem("sweepr_jwt_expires_at");
+  if (!token || !expiresAt) return null;
+  if (Date.now() >= new Date(expiresAt).getTime()) {
+    localStorage.removeItem("sweepr_jwt");
+    localStorage.removeItem("sweepr_jwt_expires_at");
+    return null;
+  }
+  return token;
 }
 
-export function setToken(token: string) {
+export function setToken(token: string, expiresAt?: string) {
   localStorage.setItem("sweepr_jwt", token);
+  if (expiresAt) {
+    localStorage.setItem("sweepr_jwt_expires_at", expiresAt);
+  }
 }
 
 export function clearToken() {
   localStorage.removeItem("sweepr_jwt");
+  localStorage.removeItem("sweepr_jwt_expires_at");
 }
 
 async function request<T>(

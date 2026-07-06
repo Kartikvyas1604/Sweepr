@@ -83,7 +83,11 @@ export function TeamDraw({ participantName: _pn, drawTeams, assignedTeam, onReve
               animate={{ scale: [1, 1.05, 1], rotate: [0, 3, -3, 0] }}
               transition={{ duration: 0.2, repeat: Infinity }}
             >
-              <span className="text-5xl">{currentTeam.flag || "🏳️"}</span>
+              {currentTeam.flagUrl ? (
+                <img src={currentTeam.flagUrl} alt="" className="h-14 w-20 rounded-sm object-cover" />
+              ) : (
+                <span className="text-5xl">{currentTeam.flag || "🏳️"}</span>
+              )}
             </motion.div>
             <p className="font-display text-xl uppercase tracking-wider text-accent">
               {currentTeam.name}
@@ -116,7 +120,11 @@ export function TeamDraw({ participantName: _pn, drawTeams, assignedTeam, onReve
                 animate={{ rotate: 0, opacity: 1 }}
                 transition={{ duration: 0.5, delay: 0.2 }}
               >
-                {currentTeam.flag || "🏆"}
+                {currentTeam.flagUrl ? (
+                  <img src={currentTeam.flagUrl} alt="" className="h-16 w-24 rounded-sm object-cover" />
+                ) : (
+                  currentTeam.flag || "🏆"
+                )}
               </motion.span>
             </motion.div>
             <div className="flex flex-col items-center gap-1">

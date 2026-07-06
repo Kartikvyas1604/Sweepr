@@ -13,7 +13,26 @@ import { GoalOverlay } from "@/components/ui/goal-overlay";
 import { TopNav } from "@/components/ui/top-nav";
 import { ShareButton } from "@/components/ui/share-button";
 import { api } from "@/lib/api-client";
-import { Trophy, Goal, AlertCircle, Globe, EyeOff, Copy, Check, Coins, Sparkles } from "lucide-react";
+import { Trophy, Goal, AlertCircle, Globe, Coins, Sparkles } from "lucide-react";
+
+function poolStatusLabel(status: string): string {
+  switch (status) {
+    case "waiting": return "OPEN";
+    case "active": return "LIVE";
+    case "settled": return "SETTLED";
+    case "pending_onchain": return "PENDING";
+    case "onchain_failed": return "FAILED";
+    default: return status.toUpperCase();
+  }
+}
+
+function poolIsOpen(status: string): boolean {
+  return status === "waiting" || status === "active";
+}
+
+function poolCanJoin(status: string): boolean {
+  return status === "waiting";
+}
 
 export default function PoolPage() {
   const params = useParams();
@@ -22,7 +41,6 @@ export default function PoolPage() {
   const [leaderboard, setLeaderboard] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [passphraseCopied, setPassphraseCopied] = useState(false);
 
   useEffect(() => {
     const joinCode = params.id as string;
@@ -66,9 +84,8 @@ export default function PoolPage() {
     );
   }
 
-  const { pool, memberCount, spotsRemaining, joinUrl } = poolData;
+  const { pool, memberCount, spotsRemaining } = poolData;
   const participants = leaderboard;
-  const isPoolFull = spotsRemaining !== undefined && spotsRemaining <= 0;
 
   return (
     <div className="relative flex min-h-dvh flex-col">
@@ -93,25 +110,18 @@ export default function PoolPage() {
                 {pool.name}
               </h1>
               <div className="mt-1 flex items-center gap-3">
-                <LiveIndicator label={pool.status === "open" ? "OPEN" : pool.status === "live" ? "LIVE" : "SETTLED"} />
+                <LiveIndicator label={poolStatusLabel(pool.status)} />
                 <Badge variant="elevated" size="sm">{memberCount ?? participants.length} players</Badge>
-                {pool.isPrivate ? (
-                  <Badge variant="outline" size="sm">
-                    <EyeOff className="h-2.5 w-2.5" />
-                    Private
-                  </Badge>
-                ) : (
-                  <Badge variant="outline" size="sm">
-                    <Globe className="h-2.5 w-2.5" />
-                    Public
-                  </Badge>
-                )}
+                <Badge variant="outline" size="sm">
+                  <Globe className="h-2.5 w-2.5" />
+                  Public
+                </Badge>
               </div>
             </div>
           </div>
 
           <div className="flex items-center gap-3">
-            {pool.status === "open" && (
+            {poolCanJoin(pool.status) && (
               <Button variant="primary" size="sm" onClick={() => router.push(`/join/${pool.joinCode}`)}>
                 <Sparkles className="h-3.5 w-3.5" />
                 Join Pool
@@ -130,54 +140,13 @@ export default function PoolPage() {
             totalPot={pool.entryFeeUsdc * (memberCount ?? participants.length)}
             participantCount={memberCount ?? participants.length}
             entryFee={pool.entryFeeUsdc}
-            status={pool.status === "settled" ? "settled" : pool.status === "live" ? "locked" : "locked"}
+            status={pool.status === "settled" ? "settled" : "locked"}
             fee={0.025}
           />
         </motion.div>
 
-        {/* Passphrase (private pools only) */}
-        {pool.isPrivate && pool.passphrase && (
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.15, duration: 0.4 }}
-          >
-            <div className="flex items-center justify-between rounded-lg border border-hairline bg-elevated/20 px-4 py-3">
-              <div className="flex items-center gap-3">
-                <EyeOff className="h-4 w-4 text-ink-muted" />
-                <span className="font-mono text-[11px] uppercase tracking-widest text-ink-muted">
-                  Passphrase
-                </span>
-                <code className="rounded-md bg-elevated/50 px-2.5 py-1 font-mono text-sm tracking-wider text-accent">
-                  {pool.passphrase}
-                </code>
-              </div>
-              <button
-                onClick={() => {
-                  navigator.clipboard.writeText(pool.passphrase);
-                  setPassphraseCopied(true);
-                  setTimeout(() => setPassphraseCopied(false), 2000);
-                }}
-                className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-wider text-ink-muted transition-colors hover:text-ink"
-              >
-                {passphraseCopied ? (
-                  <>
-                    <Check className="h-3 w-3 text-success" />
-                    Copied
-                  </>
-                ) : (
-                  <>
-                    <Copy className="h-3 w-3" />
-                    Copy
-                  </>
-                )}
-              </button>
-            </div>
-          </motion.div>
-        )}
-
         {/* Join URL share card */}
-        {pool.status === "open" && (
+        {poolCanJoin(pool.status) && (
           <motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
@@ -214,7 +183,7 @@ export default function PoolPage() {
                     Leaderboard
                   </span>
                 </div>
-                <LiveIndicator label={pool.status === "settled" ? "SETTLED" : "LIVE"} />
+                <LiveIndicator label={poolStatusLabel(pool.status)} />
               </div>
               <LeaderboardHeader />
             </CardHeader>
@@ -222,30 +191,34 @@ export default function PoolPage() {
               {participants.length === 0 ? (
                 <div className="flex flex-col items-center gap-2 py-12">
                   <p className="font-body text-sm text-ink-muted/40">No participants yet</p>
-                  {pool.status === "open" && (
+                  {poolCanJoin(pool.status) && (
                     <Button size="sm" variant="secondary" onClick={() => router.push(`/join/${pool.joinCode || params.id}`)}>
                       Join this pool
                     </Button>
                   )}
                 </div>
               ) : (
-                participants.map((participant: any, index: number) => (
+                participants.map((participant: any) => (
                   <motion.div
-                    key={participant.id}
+                    key={participant.memberId}
                     initial={{ opacity: 0, x: -20 }}
                     animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: 0.3 + index * 0.05, duration: 0.3 }}
+                    transition={{ delay: 0.3 + (participant.rank - 1) * 0.05, duration: 0.3 }}
                   >
                     <LeaderboardRow
                       participant={{
-                        id: participant.id,
+                        id: participant.memberId,
                         name: participant.displayName,
-                        walletAddress: participant.walletAddress,
-                        team: { name: participant.assignedTeam?.name || "", flag: participant.assignedTeam?.flag || "", group: participant.assignedTeam?.group || "" },
+                        walletAddress: participant.wallet,
+                        team: {
+                          name: participant.teamName || "",
+                          flag: participant.teamFlagUrl || "",
+                          group: participant.teamGroup || "",
+                        },
                         score: participant.score || 0,
-                        rank: index + 1,
+                        rank: participant.rank,
                       }}
-                      rank={index + 1}
+                      rank={participant.rank}
                     />
                   </motion.div>
                 ))

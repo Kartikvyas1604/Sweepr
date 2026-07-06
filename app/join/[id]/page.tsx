@@ -388,7 +388,11 @@ export default function JoinPage() {
                       animate={{ scale: 1 }}
                       transition={{ type: "spring", stiffness: 200, damping: 12 }}
                     >
-                      <span className="text-4xl">{assignedTeam.flagUrl || "🏆"}</span>
+                      {assignedTeam.flagUrl ? (
+                        <img src={assignedTeam.flagUrl} alt="" className="h-16 w-24 rounded-sm object-cover" />
+                      ) : (
+                        <span className="text-4xl">🏆</span>
+                      )}
                     </motion.div>
                     <div className="text-center">
                       <p className="font-display text-2xl uppercase tracking-wider text-money">
