@@ -58,15 +58,27 @@ async function signWithProvider(provider: any, message: string): Promise<string 
   let result: any;
   try {
     result = await provider.signMessage(encoded);
-  } catch {
+    console.log("[signWithProvider] success, result type:", typeof result, "has signature:", "signature" in (result ?? {}));
+  } catch (e: any) {
+    console.log("[signWithProvider] first attempt failed:", e?.message ?? e);
     try {
       result = await provider.signMessage(encoded, "utf8");
-    } catch {
+      console.log("[signWithProvider] fallback success");
+    } catch (e2: any) {
+      console.log("[signWithProvider] fallback also failed:", e2?.message ?? e2);
       return null;
     }
   }
   const sigBytes = result?.signature ?? result;
-  if (!sigBytes || sigBytes.length !== 64) return null;
+  if (!sigBytes) {
+    console.log("[signWithProvider] no signature bytes in result:", JSON.stringify(result));
+    return null;
+  }
+  if (sigBytes.length !== 64) {
+    console.log("[signWithProvider] wrong sig length:", sigBytes.length, "type:", typeof sigBytes, "isBuffer:", Buffer?.isBuffer?.(sigBytes));
+    return null;
+  }
+  console.log("[signWithProvider] sig length OK (64), encoding");
   return bs58.encode(sigBytes);
 }
 
@@ -85,7 +97,9 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
   const doAuth = useCallback(async (provider: any, wallet: string) => {
     const { nonce, message } = await api.auth.requestNonce(wallet);
+    console.log("[doAuth] signing message for", wallet, "message:", message);
     const sigEncoded = await signWithProvider(provider, message);
+    console.log("[doAuth] sig length:", sigEncoded?.length ?? 0, "sig prefix:", sigEncoded?.slice(0, 10));
     const signature = sigEncoded ?? "";
     const { token, expiresAt } = await api.auth.verify(wallet, signature, nonce);
     if (token) setToken(token, expiresAt);
@@ -127,8 +141,10 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     // intercepting when Phantom was originally connected).
     const connectResult = await provider.connect();
     const wallet = connectResult.publicKey.toBase58();
+    console.log("[ensureAuth] connected wallet:", wallet, "expected address:", address, "provider type:", typeof provider, "provider pubkey:", provider.publicKey?.toBase58?.());
     if (!wallet) throw new Error("No wallet address available");
     if (address && wallet !== address) {
+      console.log("[ensureAuth] wallet mismatch! clearing state and throwing");
       providerRef.current = null;
       localStorage.removeItem("sweepr_wallet_id");
       throw new Error(
