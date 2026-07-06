@@ -75,7 +75,7 @@ async function signWithProvider(provider: any, message: string): Promise<string 
     return null;
   }
   if (sigBytes.length !== 64) {
-    console.log("[signWithProvider] wrong sig length:", sigBytes.length, "type:", typeof sigBytes, "isBuffer:", Buffer?.isBuffer?.(sigBytes));
+    console.log("[signWithProvider] wrong sig length:", sigBytes.length, "type:", typeof sigBytes, "constructor:", sigBytes?.constructor?.name);
     return null;
   }
   console.log("[signWithProvider] sig length OK (64), encoding");
