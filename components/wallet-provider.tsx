@@ -53,32 +53,43 @@ function storeWalletId(id: string | null) {
   else localStorage.removeItem("sweepr_wallet_id");
 }
 
+function extractSignatureBytes(raw: any): Uint8Array | null {
+  if (!raw) return null;
+  // Standard format: { signature: Uint8Array } or just Uint8Array
+  let bytes = raw.signature ?? raw;
+  // Buffer-like object: { type: "Buffer", data: [...] }
+  if (bytes?.type === "Buffer" && Array.isArray(bytes.data)) {
+    return new Uint8Array(bytes.data);
+  }
+  // Nested data property: { data: Uint8Array | number[] }
+  if (bytes?.data && typeof bytes.data === "object") {
+    bytes = bytes.data;
+  }
+  // Array of numbers: [num, num, ...]
+  if (Array.isArray(bytes)) {
+    return new Uint8Array(bytes);
+  }
+  // Already a Uint8Array-like
+  if (bytes?.length === 64) {
+    return bytes;
+  }
+  return null;
+}
+
 async function signWithProvider(provider: any, message: string): Promise<string | null> {
   const encoded = new TextEncoder().encode(message);
   let result: any;
   try {
     result = await provider.signMessage(encoded);
-    console.log("[signWithProvider] success, result type:", typeof result, "has signature:", "signature" in (result ?? {}));
-  } catch (e: any) {
-    console.log("[signWithProvider] first attempt failed:", e?.message ?? e);
+  } catch {
     try {
       result = await provider.signMessage(encoded, "utf8");
-      console.log("[signWithProvider] fallback success");
-    } catch (e2: any) {
-      console.log("[signWithProvider] fallback also failed:", e2?.message ?? e2);
+    } catch {
       return null;
     }
   }
-  const sigBytes = result?.signature ?? result;
-  if (!sigBytes) {
-    console.log("[signWithProvider] no signature bytes in result:", JSON.stringify(result));
-    return null;
-  }
-  if (sigBytes.length !== 64) {
-    console.log("[signWithProvider] wrong sig length:", sigBytes.length, "type:", typeof sigBytes, "constructor:", sigBytes?.constructor?.name);
-    return null;
-  }
-  console.log("[signWithProvider] sig length OK (64), encoding");
+  const sigBytes = extractSignatureBytes(result);
+  if (!sigBytes) return null;
   return bs58.encode(sigBytes);
 }
 
@@ -97,9 +108,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
   const doAuth = useCallback(async (provider: any, wallet: string) => {
     const { nonce, message } = await api.auth.requestNonce(wallet);
-    console.log("[doAuth] signing message for", wallet, "message:", message);
     const sigEncoded = await signWithProvider(provider, message);
-    console.log("[doAuth] sig length:", sigEncoded?.length ?? 0, "sig prefix:", sigEncoded?.slice(0, 10));
     const signature = sigEncoded ?? "";
     const { token, expiresAt } = await api.auth.verify(wallet, signature, nonce);
     if (token) setToken(token, expiresAt);
@@ -141,10 +150,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     // intercepting when Phantom was originally connected).
     const connectResult = await provider.connect();
     const wallet = connectResult.publicKey.toBase58();
-    console.log("[ensureAuth] connected wallet:", wallet, "expected address:", address, "provider type:", typeof provider, "provider pubkey:", provider.publicKey?.toBase58?.());
     if (!wallet) throw new Error("No wallet address available");
     if (address && wallet !== address) {
-      console.log("[ensureAuth] wallet mismatch! clearing state and throwing");
       providerRef.current = null;
       localStorage.removeItem("sweepr_wallet_id");
       throw new Error(
@@ -156,8 +163,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     storeWallet(wallet);
     try {
       await doAuth(provider, wallet);
-      const jwt = getToken();
-      console.log("[ensureAuth] JWT after doAuth:", jwt ? jwt.slice(0, 20) + "..." : "NULL");
     } catch (e: any) {
       console.error("[ensureAuth] doAuth failed:", e?.message ?? e);
       throw e;
