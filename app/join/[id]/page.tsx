@@ -102,7 +102,9 @@ export default function JoinPage() {
 
         console.log("[join] signTransaction...");
         setSigStatus("Sign in your wallet...");
-        const signedTx = await provider.signTransaction(tx);
+        const signedResult = await provider.signTransaction(tx);
+        // Some wallets return { signature, transaction } instead of the tx directly
+        const signedTx = signedResult.transaction ?? signedResult;
         console.log("[join] signed");
 
         console.log("[join] sendRawTransaction...");
@@ -131,7 +133,7 @@ export default function JoinPage() {
       }
     } catch (e: any) {
       setError(e.message || "Failed to join pool");
-      if (step === "signing") setStep("name");
+      setStep("name");
     } finally {
       setJoining(false);
       setSigStatus(null);
@@ -347,6 +349,12 @@ export default function JoinPage() {
                         VERIFYING
                       </motion.span>
                     </div>
+                    {error && (
+                      <div className="flex items-center gap-2 rounded-md bg-accent/10 px-3 py-2">
+                        <AlertCircle className="h-3.5 w-3.5 shrink-0 text-accent" />
+                        <p className="font-mono text-[11px] text-accent">{error}</p>
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               </motion.div>

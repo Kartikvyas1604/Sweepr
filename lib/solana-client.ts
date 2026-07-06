@@ -56,16 +56,14 @@ function buildJoinPoolInstruction(
   data.set(poolIdBytes, 8);
   data.set(teamIdBytes, 8 + 16);
 
+  // Only include non-optional accounts (omit memberUsdcAta and escrowVault
+  // since the pool was initialized with entryFeeUsdc=0 on-chain).
   return new TransactionInstruction({
     programId,
     keys: [
       { pubkey: memberPubkey, isSigner: true, isWritable: true },
       { pubkey: poolPda, isSigner: false, isWritable: true },
       { pubkey: memberPda, isSigner: false, isWritable: true },
-      // memberUsdcAta (optional — null for SOL-only flow)
-      { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
-      // escrowVault (optional — null for SOL-only flow)
-      { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
       { pubkey: usdcMint, isSigner: false, isWritable: false },
       { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
       { pubkey: ASSOCIATED_TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
