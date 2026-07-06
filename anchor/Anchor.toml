@@ -15,7 +15,7 @@ sweepr = "6bvmJVnmogfwcVTrU9y6MaM9G8vYRQBXeHbiZw5BU2sC"
 sweepr = "6bvmJVnmogfwcVTrU9y6MaM9G8vYRQBXeHbiZw5BU2sC"
 
 [provider]
-cluster = "localnet"
+cluster = "devnet"
 wallet = "~/.config/solana/id.json"
 
 [scripts]
