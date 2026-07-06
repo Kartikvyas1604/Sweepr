@@ -121,17 +121,23 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     const existing = getToken();
     if (existing) return;
     const provider = await getWalletProvider(address);
-    // Don't call provider.connect() again if we're already connected — use the
-    // current address. Re-connecting can bring up the wrong wallet extension
-    // when multiple wallets (Phantom, BagPack) are installed.
-    let wallet = address;
-    if (!wallet) {
-      const connectResult = await provider.connect();
-      wallet = connectResult.publicKey.toBase58();
-      setAddress(wallet);
-      storeWallet(wallet);
-    }
+    // Always call connect() to establish a wallet session — providers need an
+    // active session before signMessage() works. We verify the connected wallet
+    // matches the expected address to catch extension conflicts (e.g. BagPack
+    // intercepting when Phantom was originally connected).
+    const connectResult = await provider.connect();
+    const wallet = connectResult.publicKey.toBase58();
     if (!wallet) throw new Error("No wallet address available");
+    if (address && wallet !== address) {
+      providerRef.current = null;
+      localStorage.removeItem("sweepr_wallet_id");
+      throw new Error(
+        `Connected wallet ${wallet} does not match expected wallet ${address}. ` +
+        "Please refresh and reconnect with the correct wallet.",
+      );
+    }
+    setAddress(wallet);
+    storeWallet(wallet);
     try {
       await doAuth(provider, wallet);
       const jwt = getToken();
@@ -160,7 +166,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       connectingRef.current = false;
       setConnecting(false);
     }
-  }, [getWalletProvider]);
+  }, [getWalletProvider, address]);
 
   const disconnect = useCallback(() => {
     setAddress(null);
