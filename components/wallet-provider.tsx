@@ -161,19 +161,24 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     const existing = getToken();
     if (existing) return;
     const provider = await getWalletProvider(address);
-    // Get the wallet address without calling connect() a second time.
-    // Wallets like Phantom hang if connect() is called when already connected.
     let wallet = address;
-    if (!wallet) {
+
+    if (!wallet || !isValidSolanaAddress(wallet)) {
+      wallet = null;
       const pk = provider.publicKey;
-      if (pk?.toBase58) wallet = pk.toBase58();
-      else if (pk) wallet = pk.toString();
+      if (pk?.toBase58) {
+        const addr = pk.toBase58();
+        if (typeof addr === "string" && isValidSolanaAddress(addr)) wallet = addr;
+      }
     }
-    if (!wallet) {
+
+    if (!wallet || !isValidSolanaAddress(wallet)) {
       const connectResult = await provider.connect();
       wallet = extractWalletAddress(connectResult);
     }
-    if (!wallet) throw new Error("No wallet address available");
+    if (!wallet || !isValidSolanaAddress(wallet)) {
+      throw new Error("Invalid wallet address — expected a valid Solana pubkey");
+    }
     setAddress(wallet);
     storeWallet(wallet);
     try {
@@ -184,14 +189,21 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     }
   }, [getWalletProvider, doAuth, address]);
 
-  function extractWalletAddress(connectResult: any): string | null {
-    if (!connectResult) return null;
-    const pk = connectResult.publicKey ?? connectResult;
-    if (typeof pk === "string") return pk;
-    if (pk?.toBase58) return pk.toBase58();
-    if (pk?.toString) return pk.toString();
-    return null;
+function isValidSolanaAddress(value: string): boolean {
+  return value.length >= 32 && value.length <= 44 && /^[1-9A-HJ-NP-Za-km-z]+$/.test(value);
+}
+
+function extractWalletAddress(connectResult: any): string | null {
+  if (!connectResult) return null;
+  const pk = connectResult.publicKey ?? connectResult;
+  // Phantom returns { publicKey: PublicKey }, Solflare returns { publicKey: { toBase58: ... } }
+  if (typeof pk === "string") return isValidSolanaAddress(pk) ? pk : null;
+  if (pk?.toBase58) {
+    const addr = pk.toBase58();
+    return typeof addr === "string" && isValidSolanaAddress(addr) ? addr : null;
   }
+  return null;
+}
 
   const connect = useCallback(async () => {
     if (connectingRef.current) return;
@@ -201,7 +213,9 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       const provider = await getWalletProvider(address);
       const connectResult = await provider.connect();
       const wallet = extractWalletAddress(connectResult);
-      if (!wallet) throw new Error("Could not get wallet address from provider");
+      if (!wallet || !isValidSolanaAddress(wallet)) {
+        throw new Error("Could not get valid Solana wallet address from provider");
+      }
       setAddress(wallet);
       storeWallet(wallet);
       // Auth happens lazily via ensureAuth on first action

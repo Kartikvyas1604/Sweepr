@@ -153,12 +153,11 @@ export async function POST(request: Request) {
       throw new ApiError(500, "POOL_CREATE_FAILED", "Failed to create pool");
     }
 
-    // Initialize on-chain pool (0 fee — fee tracked in DB only)
-    if (entryFeeUsdc > 0) {
-      await callInitializePool(poolId, entryFeeUsdc, maxMembers).catch((e) => {
-        logger.error("Pool init on-chain failed (non-fatal)", { poolId, error: String(e) });
-      });
-    }
+    // Initialize on-chain pool (free pool — 0 fee on-chain, fee tracked in DB only)
+    // Required even for "free" pools so the PoolState PDA exists for joinPool.
+    await callInitializePool(poolId, entryFeeUsdc, maxMembers).catch((e) => {
+      logger.error("Pool init on-chain failed (non-fatal)", { poolId, error: String(e) });
+    });
 
     await publishPoolUpdate(pool.id, {
       type: "heartbeat",

@@ -12,7 +12,7 @@ import { TeamDraw } from "@/components/ui/team-draw";
 import { LiveIndicator } from "@/components/ui/live-indicator";
 import { useWallet } from "@/components/wallet-provider";
 import { api } from "@/lib/api-client";
-import { buildJoinPoolTx, getUsdcMintForNetwork } from "@/lib/solana-client";
+import { buildJoinPoolTx, getUsdcMintForNetwork, deriveMemberPdaClient } from "@/lib/solana-client";
 import { TopNav } from "@/components/ui/top-nav";
 import {
   Users, DollarSign, Check, Globe, AlertCircle,
@@ -88,36 +88,74 @@ export default function JoinPage() {
         const usdcMint = getUsdcMintForNetwork(network);
 
         const entryFeeSol = Number(pool.entryFeeUsdc);
-        console.log("[join] buildJoinPoolTx...", { poolId: pool.id, entryFeeSol });
-        const tx = await buildJoinPoolTx(
-          pool.id,
-          provider.publicKey,
-          assignRes.teamIdBytes,
-          programId,
-          usdcMint,
-          conn,
-          entryFeeSol,
-        );
-        console.log("[join] tx built");
 
-        console.log("[join] signTransaction...");
-        setSigStatus("Sign in your wallet...");
-        const signedResult = await provider.signTransaction(tx);
-        // Some wallets return { signature, transaction } instead of the tx directly
-        const signedTx = signedResult.transaction ?? signedResult;
-        console.log("[join] signed");
+        const memberPda = deriveMemberPdaClient(pool.id, provider.publicKey, programId);
+        console.log("[join] Checking if member account already exists on-chain...", memberPda.toString());
+        setSigStatus("Checking membership status...");
+        const memberAccount = await conn.getAccountInfo(memberPda);
 
-        console.log("[join] sendRawTransaction...");
-        setSigStatus("Sending to Solana...");
-        const sig = await conn.sendRawTransaction(signedTx.serialize());
-        setSigStatus("Confirming transaction...");
+        let sig = null;
+        if (memberAccount) {
+          console.log("[join] Member account already exists on-chain. Retrieving past transaction signature...");
+          setSigStatus("Retrieving previous join details...");
+          const signatures = await conn.getSignaturesForAddress(memberPda, { limit: 1 });
+          if (signatures && signatures.length > 0) {
+            sig = signatures[0].signature;
+            console.log("[join] Found existing transaction signature:", sig);
+          } else {
+            console.warn("[join] Member account exists but signatures list is empty.");
+          }
+        }
 
-        const latestBlockhash = await conn.getLatestBlockhash();
-        await conn.confirmTransaction({
-          signature: sig,
-          blockhash: latestBlockhash.blockhash,
-          lastValidBlockHeight: latestBlockhash.lastValidBlockHeight,
-        });
+        if (!sig) {
+          console.log("[join] buildJoinPoolTx...", { poolId: pool.id, entryFeeSol });
+          const { tx } = await buildJoinPoolTx(
+            pool.id,
+            provider.publicKey,
+            assignRes.teamIdBytes,
+            programId,
+            usdcMint,
+            conn,
+            entryFeeSol,
+          );
+          console.log("[join] tx built");
+
+          console.log("[join] signTransaction...");
+          setSigStatus("Sign in your wallet...");
+          const signedResult = await provider.signTransaction(tx);
+          const signedTx = signedResult.transaction ?? signedResult;
+          console.log("[join] signed");
+
+          console.log("[join] sendRawTransaction...");
+          setSigStatus("Sending to Solana...");
+          sig = await conn.sendRawTransaction(signedTx.serialize());
+          setSigStatus("Confirming transaction...");
+
+          // Polling confirmation strategy to avoid buggy WebSocket connections on devnet
+          let confirmed = false;
+          const maxRetries = 45; // 45 seconds max
+          for (let i = 0; i < maxRetries; i++) {
+            const status = await conn.getSignatureStatus(sig);
+            const val = status?.value;
+            if (val && (val.confirmationStatus === "confirmed" || val.confirmationStatus === "finalized")) {
+              confirmed = true;
+              break;
+            }
+            if (val && val.err) {
+              throw new Error(`Transaction failed on-chain: ${JSON.stringify(val.err)}`);
+            }
+            await new Promise((resolve) => setTimeout(resolve, 1000));
+          }
+          if (!confirmed) {
+            // Final fallback check: if the member PDA exists now, it got confirmed on-chain
+            const checkPdaExists = await conn.getAccountInfo(memberPda);
+            if (checkPdaExists) {
+              console.log("Confirmed via account check");
+            } else {
+              throw new Error("Transaction confirmation timed out. Please check your wallet history.");
+            }
+          }
+        }
 
         setSigStatus("Verifying & finalizing...");
         const result = await api.pools.join(joinCode, name.trim(), sig, assignRes.tempToken);

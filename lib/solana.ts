@@ -63,11 +63,21 @@ export function getProgram(): Program {
     const wallet = {
       publicKey: keypair.publicKey,
       signTransaction: async (tx: any) => {
-        tx.sign([keypair]);
+        if ("version" in tx) {
+          tx.sign([keypair]);
+        } else {
+          tx.sign(keypair);
+        }
         return tx;
       },
       signAllTransactions: async (txs: any[]) => {
-        for (const tx of txs) tx.sign([keypair]);
+        for (const tx of txs) {
+          if ("version" in tx) {
+            tx.sign([keypair]);
+          } else {
+            tx.sign(keypair);
+          }
+        }
         return txs;
       },
     };
@@ -139,9 +149,38 @@ export async function getEscrowAta(poolId: string): Promise<PublicKey> {
   return deriveEscrowATA(poolId);
 }
 
+async function ensureOracleFunded(): Promise<void> {
+  try {
+    const conn = getConnection();
+    const keypair = getOracleKeypair();
+    const balance = await conn.getBalance(keypair.publicKey);
+    const minBalance = 0.05 * LAMPORTS_PER_SOL; // 0.05 SOL minimum
+
+    if (balance < minBalance) {
+      logger.warn("Oracle wallet low balance, requesting airdrop", {
+        pubkey: keypair.publicKey.toBase58(),
+        balance: balance / LAMPORTS_PER_SOL,
+      });
+
+      const sig = await conn.requestAirdrop(
+        keypair.publicKey,
+        2 * LAMPORTS_PER_SOL,
+      );
+      await conn.confirmTransaction(sig, "confirmed");
+
+      logger.info("Oracle wallet funded via airdrop", {
+        sig,
+        newBalance: (await conn.getBalance(keypair.publicKey)) / LAMPORTS_PER_SOL,
+      });
+    }
+  } catch (e) {
+    logger.error("Failed to fund oracle wallet", { error: String(e) });
+  }
+}
+
 export async function callInitializePool(
   poolId: string,
-  _entryFeeUsdc: number,
+  entryFeeUsdc: number,
   maxMembers: number,
 ): Promise<string> {
   try {
@@ -149,18 +188,30 @@ export async function callInitializePool(
     const [poolPda] = derivePoolPDA(poolId);
     const escrowAta = deriveEscrowATA(poolId);
     const usdcMint = getUsdcMint();
+    const oracleKeypair = getOracleKeypair();
 
-    // NOTE: On-chain pool is initialized with 0 fee (free pool) because we
-    // handle entry fees via native SOL transfers instead of USDC SPL tokens.
-    // The entry fee amount is tracked in the database only.
+    // Ensure oracle wallet has SOL for rent + tx fees
+    await ensureOracleFunded();
+
+    const poolIdBytes = Array.from(uuidToBytes(poolId));
+
+    // Check if pool already initialized on-chain
+    const existingAccount = await getConnection().getAccountInfo(poolPda);
+    if (existingAccount) {
+      logger.info("Pool already initialized on-chain, skipping", { poolId });
+      return "already_initialized";
+    }
+
+    // Initialize as free pool on-chain (entryFeeUsdc=0).
+    // Entry fee is tracked in the database, not on-chain.
     const sig = await (prog.methods as any)
       .initializePool(
-        Array.from(uuidToBytes(poolId)),
+        poolIdBytes,
         new BN(0),
         maxMembers,
       )
       .accounts({
-        authority: getOracleKeypair().publicKey,
+        authority: oracleKeypair.publicKey,
         poolState: poolPda,
         escrowVault: escrowAta,
         usdcMint: usdcMint,
@@ -170,16 +221,16 @@ export async function callInitializePool(
       })
       .rpc();
 
+    logger.info("initializePool succeeded", { poolId, sig });
     return sig;
   } catch (e) {
-    logger.error("callInitializePool failed", {
-      poolId,
-      error: String(e),
-    });
+    const msg = e instanceof Error ? e.message : String(e);
+    const logs = (e as any)?.logs;
+    logger.error("callInitializePool failed", { poolId, error: msg, logs });
     throw new ApiError(
       500,
       "INIT_POOL_FAILED",
-      "Failed to initialize pool on-chain",
+      `Failed to initialize pool on-chain: ${msg}`,
     );
   }
 }
@@ -444,10 +495,16 @@ export async function verifyJoinPoolTx(
 ): Promise<boolean> {
   try {
     const conn = getConnection();
-    const tx = await conn.getTransaction(txSignature, {
-      commitment: "confirmed",
-      maxSupportedTransactionVersion: 0,
-    });
+    let tx = null;
+    for (let attempt = 1; attempt <= 5; attempt++) {
+      tx = await conn.getTransaction(txSignature, {
+        commitment: "confirmed",
+        maxSupportedTransactionVersion: 0,
+      });
+      if (tx) break;
+      logger.info(`verifyJoinPoolTx: Transaction ${txSignature} not found, retrying attempt ${attempt}...`);
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+    }
     if (!tx) return false;
 
     const [expectedPoolPda] = derivePoolPDA(expectedPoolId);

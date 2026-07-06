@@ -83,7 +83,7 @@ export async function POST(
       if (!raw) {
         throw new ApiError(400, "TEMP_TOKEN_EXPIRED", "Team assignment expired. Please try again.");
       }
-      const pending = JSON.parse(raw as string);
+      const pending = typeof raw === "string" ? JSON.parse(raw) : (raw as any);
       if (pending.wallet !== wallet || pending.poolId !== pool.id) {
         throw new ApiError(400, "TEMP_TOKEN_INVALID", "Invalid team assignment token.");
       }
