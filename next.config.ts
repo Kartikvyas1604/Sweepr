@@ -1,3 +1,10 @@
+const RPC_URLS = (process.env.NEXT_PUBLIC_SOLANA_RPC ?? "")
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
+
+const CONNECT_SRC = ["'self'", ...RPC_URLS].join(" ");
+
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
@@ -20,7 +27,7 @@ const nextConfig: NextConfig = {
           {
             key: "Content-Security-Policy",
             value:
-              "default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https:; font-src 'self' data:;",
+              `default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src ${CONNECT_SRC}; font-src 'self' data:;`,
           },
         ],
       },

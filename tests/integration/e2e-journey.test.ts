@@ -25,6 +25,7 @@ vi.mock("@/lib/txline", () => ({
   ]),
   getFixtureEvents: vi.fn().mockResolvedValue([
     { id: "evt_001", fixtureId: "f1", teamId: "T1", type: "goal", minute: 10, playerName: "Messi", detail: null },
+    { id: "evt_002", fixtureId: "f1", teamId: "T2", type: "goal", minute: 20, playerName: "Ronaldo", detail: null },
   ]),
 }));
 
