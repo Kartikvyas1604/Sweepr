@@ -20,7 +20,6 @@ function poolStatusLabel(status: string): string {
     case "waiting": return "OPEN";
     case "active": return "LIVE";
     case "settled": return "SETTLED";
-    case "pending_onchain": return "PENDING";
     case "onchain_failed": return "FAILED";
     default: return status.toUpperCase();
   }

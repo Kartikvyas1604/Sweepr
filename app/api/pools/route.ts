@@ -133,7 +133,6 @@ export async function POST(request: Request) {
       escrowPda = pda.toString();
     }
 
-    // Insert pool with "pending_onchain" status for paid pools
     const { data: pool, error } = await supabaseAdmin
       .from("pools")
       .insert({
@@ -144,7 +143,7 @@ export async function POST(request: Request) {
         entry_fee_usdc: entryFeeUsdc,
         max_members: maxMembers,
         escrow_pda: escrowPda,
-        status: entryFeeUsdc > 0 ? "pending_onchain" : "waiting",
+        status: "waiting",
       })
       .select()
       .single();
@@ -154,23 +153,11 @@ export async function POST(request: Request) {
       throw new ApiError(500, "POOL_CREATE_FAILED", "Failed to create pool");
     }
 
-    // For paid pools, initialize on-chain before marking as ready
+    // Initialize on-chain pool (0 fee — fee tracked in DB only)
     if (entryFeeUsdc > 0) {
-      try {
-        await callInitializePool(poolId, entryFeeUsdc, maxMembers);
-        await supabaseAdmin
-          .from("pools")
-          .update({ status: "waiting" })
-          .eq("id", poolId);
-        pool.status = "waiting";
-      } catch (e) {
-        await supabaseAdmin
-          .from("pools")
-          .update({ status: "onchain_failed" })
-          .eq("id", poolId);
-        pool.status = "onchain_failed";
-        throw new ApiError(500, "INIT_POOL_FAILED", "Failed to initialize pool on-chain. Please try again.");
-      }
+      await callInitializePool(poolId, entryFeeUsdc, maxMembers).catch((e) => {
+        logger.error("Pool init on-chain failed (non-fatal)", { poolId, error: String(e) });
+      });
     }
 
     await publishPoolUpdate(pool.id, {
