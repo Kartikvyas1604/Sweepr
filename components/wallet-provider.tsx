@@ -100,6 +100,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const connectingRef = useRef(false);
   const providerRef = useRef<any>(null);
   const pendingResolveRef = useRef<((value: any) => void) | null>(null);
+  const pendingRejectRef = useRef<((reason?: any) => void) | null>(null);
 
   useEffect(() => {
     const stored = getStoredWallet();
@@ -120,6 +121,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     storeWalletId(detected.id);
     const resolve = pendingResolveRef.current;
     pendingResolveRef.current = null;
+    pendingRejectRef.current = null;
     if (resolve) resolve(detected.provider);
   }, []);
 
@@ -134,8 +136,9 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         return providerRef.current;
       }
     }
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
       pendingResolveRef.current = resolve;
+      pendingRejectRef.current = reject;
       setSelectorOpen(true);
     });
   }, []);
@@ -203,7 +206,10 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         onSelect={handleWalletSelect}
         onClose={() => {
           setSelectorOpen(false);
+          const reject = pendingRejectRef.current;
           pendingResolveRef.current = null;
+          pendingRejectRef.current = null;
+          if (reject) reject(new Error("Wallet selection cancelled"));
         }}
       />
       <WalletContext.Provider
