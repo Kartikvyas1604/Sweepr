@@ -152,7 +152,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     // matches the expected address to catch extension conflicts (e.g. BagPack
     // intercepting when Phantom was originally connected).
     const connectResult = await provider.connect();
-    const wallet = connectResult.publicKey.toBase58();
+    const wallet = extractWalletAddress(connectResult);
     if (!wallet) throw new Error("No wallet address available");
     if (address && wallet !== address) {
       providerRef.current = null;
@@ -172,14 +172,24 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     }
   }, [getWalletProvider, doAuth, address]);
 
+  function extractWalletAddress(connectResult: any): string | null {
+    if (!connectResult) return null;
+    const pk = connectResult.publicKey ?? connectResult;
+    if (typeof pk === "string") return pk;
+    if (pk?.toBase58) return pk.toBase58();
+    if (pk?.toString) return pk.toString();
+    return null;
+  }
+
   const connect = useCallback(async () => {
     if (connectingRef.current) return;
     connectingRef.current = true;
     setConnecting(true);
     try {
       const provider = await getWalletProvider(address);
-      const { publicKey } = await provider.connect();
-      const wallet = publicKey.toBase58();
+      const connectResult = await provider.connect();
+      const wallet = extractWalletAddress(connectResult);
+      if (!wallet) throw new Error("Could not get wallet address from provider");
       setAddress(wallet);
       storeWallet(wallet);
       // Auth happens lazily via ensureAuth on first action
