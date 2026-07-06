@@ -104,9 +104,9 @@ export default function PoolsPage() {
                         <div className="mt-0.5 flex items-center gap-2 font-mono text-[10px] text-ink-muted/40">
                           <span>{pool.memberCount} players</span>
                           <span>·</span>
-                          <span>{pool.totalStakedUsdc} USDC pot</span>
+                          <span>{pool.totalStakedUsdc} SOL pot</span>
                           <span>·</span>
-                          <span>{pool.entryFeeUsdc} USDC entry</span>
+                          <span>{pool.entryFeeUsdc} SOL entry</span>
                         </div>
                       </div>
                     </div>

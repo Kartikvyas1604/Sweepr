@@ -5,6 +5,7 @@ import {
   SystemProgram,
   TransactionMessage,
   VersionedTransaction,
+  LAMPORTS_PER_SOL,
 } from "@solana/web3.js";
 import {
   Program,
@@ -16,7 +17,6 @@ import {
 import {
   TOKEN_PROGRAM_ID,
   ASSOCIATED_TOKEN_PROGRAM_ID,
-  getOrCreateAssociatedTokenAccount,
 } from "@solana/spl-token";
 import bs58 from "bs58";
 import crypto from "crypto";
@@ -141,7 +141,7 @@ export async function getEscrowAta(poolId: string): Promise<PublicKey> {
 
 export async function callInitializePool(
   poolId: string,
-  entryFeeUsdc: number,
+  _entryFeeUsdc: number,
   maxMembers: number,
 ): Promise<string> {
   try {
@@ -150,10 +150,13 @@ export async function callInitializePool(
     const escrowAta = deriveEscrowATA(poolId);
     const usdcMint = getUsdcMint();
 
+    // NOTE: On-chain pool is initialized with 0 fee (free pool) because we
+    // handle entry fees via native SOL transfers instead of USDC SPL tokens.
+    // The entry fee amount is tracked in the database only.
     const sig = await (prog.methods as any)
       .initializePool(
         Array.from(uuidToBytes(poolId)),
-        new BN(entryFeeUsdc),
+        new BN(0),
         maxMembers,
       )
       .accounts({
@@ -171,7 +174,6 @@ export async function callInitializePool(
   } catch (e) {
     logger.error("callInitializePool failed", {
       poolId,
-      entryFeeUsdc,
       error: String(e),
     });
     throw new ApiError(
@@ -194,23 +196,10 @@ export async function callJoinPool(
     const usdcMint = getUsdcMint();
     const escrowAta = await getEscrowAta(poolId);
 
-    const pool = await (prog.account as any).poolState.fetch(poolPda);
-    const isPaidPool = pool.entryFeeUsdc.toNumber() > 0;
-
-    let memberUsdcAta = null;
-    let escrowVaultAccount = null;
-
-    if (isPaidPool) {
-      memberUsdcAta = (
-        await getOrCreateAssociatedTokenAccount(
-          getConnection(),
-          getOracleKeypair(),
-          usdcMint,
-          memberWallet,
-        )
-      ).address;
-      escrowVaultAccount = escrowAta;
-    }
+    // NOTE: All pools are on-chain free pools (entryFeeUsdc=0) since we
+    // handle entry fees via native SOL transfers. USDC accounts are always null.
+    const memberUsdcAta = null;
+    const escrowVaultAccount = null;
 
     const sig = await (prog.methods as any)
       .joinPool(Array.from(uuidToBytes(poolId)), Array.from(teamId))
@@ -305,34 +294,10 @@ export async function callSettlePool(
     const escrowAta = await getEscrowAta(poolId);
     const usdcMint = getUsdcMint();
 
-    const pool = await (prog.account as any).poolState.fetch(poolPda);
-    const isPaidPool = pool.entryFeeUsdc.toNumber() > 0;
-
-    let winnerUsdcAta = null;
-    let protocolFeeAta = null;
-    let escrowVaultAccount = null;
-
-    if (isPaidPool) {
-      winnerUsdcAta = (
-        await getOrCreateAssociatedTokenAccount(
-          getConnection(),
-          getOracleKeypair(),
-          usdcMint,
-          new PublicKey(winnerWallet),
-        )
-      ).address;
-
-      protocolFeeAta = (
-        await getOrCreateAssociatedTokenAccount(
-          getConnection(),
-          getOracleKeypair(),
-          usdcMint,
-          new PublicKey(env.PROTOCOL_FEE_WALLET),
-        )
-      ).address;
-
-      escrowVaultAccount = escrowAta;
-    }
+    // NOTE: All pools are on-chain free pools — USDC accounts are always null.
+    const winnerUsdcAta = null;
+    const protocolFeeAta = null;
+    const escrowVaultAccount = null;
 
     const sig = await (prog.methods as any)
       .settlePool(
@@ -475,6 +440,7 @@ export async function verifyJoinPoolTx(
   txSignature: string,
   expectedPoolId: string,
   expectedMemberWallet: string,
+  expectedEntryFeeSol: number = 0,
 ): Promise<boolean> {
   try {
     const conn = getConnection();
@@ -486,25 +452,61 @@ export async function verifyJoinPoolTx(
 
     const [expectedPoolPda] = derivePoolPDA(expectedPoolId);
     const [expectedMemberPda] = deriveMemberPDA(expectedPoolId, expectedMemberWallet);
-
     const programIdStr = env.SWEEPR_PROGRAM_ID;
+    const memberPubkey = new PublicKey(expectedMemberWallet);
+
+    let hasProgramIx = false;
+    let solTransferVerified = false;
 
     for (const ix of tx.transaction.message.compiledInstructions) {
       const accountKeys = tx.transaction.message.staticAccountKeys;
       const progId = accountKeys[ix.programIdIndex].toString();
-      if (progId !== programIdStr) continue;
 
-      const ixAccounts = ix.accountKeyIndexes.map(
-        (idx: number) => accountKeys[idx].toString(),
-      );
+      // Check for Anchor program joinPool instruction
+      if (progId === programIdStr) {
+        const ixAccounts = ix.accountKeyIndexes.map(
+          (idx: number) => accountKeys[idx].toString(),
+        );
+        const hasPool = ixAccounts.includes(expectedPoolPda.toString());
+        const hasMember = ixAccounts.includes(expectedMemberPda.toString());
+        if (hasPool && hasMember) {
+          hasProgramIx = true;
+        }
+      }
 
-      const hasPool = ixAccounts.includes(expectedPoolPda.toString());
-      const hasMember = ixAccounts.includes(expectedMemberPda.toString());
-      if (hasPool && hasMember) {
-        return true;
+      // Check for SOL transfer to pool PDA
+      if (progId === SystemProgram.programId.toBase58()) {
+        const ixAccounts = ix.accountKeyIndexes.map(
+          (idx: number) => accountKeys[idx].toString(),
+        );
+        const data = Buffer.from(ix.data); // base58 decoded bytes
+        // Solana SystemProgram.transfer instruction: 4-byte discriminator (0x02)... then 8-byte LE amount
+        // Simplification: check if member is sender and poolPDA is receiver
+        const fromIdx = ixAccounts[0];
+        const toIdx = ixAccounts[1];
+        if (fromIdx === memberPubkey.toBase58() && toIdx === expectedPoolPda.toBase58()) {
+          solTransferVerified = true;
+        }
       }
     }
-    return false;
+
+    // Verify SOL balance change as a second check
+    if (expectedEntryFeeSol > 0 && tx.meta) {
+      const preBalances = tx.meta.preBalances;
+      const postBalances = tx.meta.postBalances;
+      const poolIdx = tx.transaction.message.staticAccountKeys.findIndex(
+        (k) => k.toBase58() === expectedPoolPda.toBase58(),
+      );
+      if (poolIdx >= 0) {
+        const diff = postBalances[poolIdx] - preBalances[poolIdx];
+        const expectedLamports = Math.round(expectedEntryFeeSol * LAMPORTS_PER_SOL);
+        if (diff >= expectedLamports) {
+          solTransferVerified = true;
+        }
+      }
+    }
+
+    return hasProgramIx && solTransferVerified;
   } catch (e) {
     logger.error("Join pool tx verification failed", {
       txSignature,
@@ -514,11 +516,11 @@ export async function verifyJoinPoolTx(
   }
 }
 
-export async function verifyUsdcTransfer(
+export async function verifySolTransfer(
   txSignature: string,
   expectedFrom: string,
   expectedTo: string,
-  expectedAmount: number,
+  expectedLamports: number,
 ): Promise<boolean> {
   try {
     const conn = getConnection();
@@ -529,47 +531,22 @@ export async function verifyUsdcTransfer(
 
     if (!tx) return false;
 
-    const preBalances = tx.meta?.preTokenBalances ?? [];
-    const postBalances = tx.meta?.postTokenBalances ?? [];
+    const preBalances = tx.meta?.preBalances ?? [];
+    const postBalances = tx.meta?.postBalances ?? [];
+    const accounts = tx.transaction.message.staticAccountKeys;
 
-    // FIX: pre/post token balances use accountIndex (position in the tx account list),
-    // not wallet addresses. We need to match by accountIndex and check that the
-    // token account owner matches expectedFrom/expectedTo.
-    for (const pre of preBalances) {
-      if (pre.mint !== getUsdcMint().toBase58()) continue;
+    const fromIdx = accounts.findIndex((a) => a.toBase58() === expectedFrom);
+    const toIdx = accounts.findIndex((a) => a.toBase58() === expectedTo);
 
-      const post = postBalances.find(
-        (p: any) =>
-          p.accountIndex === pre.accountIndex &&
-          p.mint === pre.mint,
-      );
-      if (!post) continue;
+    if (fromIdx < 0 || toIdx < 0) return false;
 
-      const preAmount = Number(pre.uiTokenAmount.amount);
-      const postAmount = Number(post.uiTokenAmount.amount);
+    const fromDiff = preBalances[fromIdx] - postBalances[fromIdx];
+    const toDiff = postBalances[toIdx] - preBalances[toIdx];
 
-      // Token account owner didn't change in a transfer — the token account itself
-      // is an ATA owned by the user or escrow. Check that the token account owner
-      // is one of our expected addresses.
-      const owner = pre.owner;
-      if (owner !== expectedFrom && owner !== expectedTo) continue;
-
-      const diff = Math.abs(postAmount - preAmount);
-      // The difference must be exactly the entry fee (in micro-units, 6 decimals)
-      const expectedMicroUnits = Math.round(expectedAmount * 1_000_000);
-      if (diff === expectedMicroUnits) {
-        return true;
-      }
-
-      // Also check raw amount (if expectedAmount is already in micro-units)
-      if (diff === expectedAmount) {
-        return true;
-      }
-    }
-
-    return false;
+    // Allow for tx fees (from account loses more than expected)
+    return toDiff >= expectedLamports && fromDiff >= expectedLamports;
   } catch (e) {
-    logger.error("USDC transfer verification failed", {
+    logger.error("SOL transfer verification failed", {
       txSignature,
       error: String(e),
     });

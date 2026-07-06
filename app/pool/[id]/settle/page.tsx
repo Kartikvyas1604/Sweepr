@@ -326,19 +326,19 @@ export default function SettlePage() {
                     <div className="w-full space-y-2 rounded-lg bg-elevated/30 px-4 py-4">
                       <div className="flex items-center justify-between font-mono text-xs text-ink-muted">
                         <span>Total Pot</span>
-                        <span className="tabular-nums text-ink">{pool?.totalPot ?? 0} USDC</span>
+                        <span className="tabular-nums text-ink">{pool?.totalPot ?? 0} SOL</span>
                       </div>
                       <div className="flex items-center justify-between font-mono text-xs text-ink-muted">
                         <span>Sweepr Fee (2.5%)</span>
                         <span className="tabular-nums text-ink">
-                          {((pool?.totalPot ?? 0) * 0.025).toFixed(2)} USDC
+                          {((pool?.totalPot ?? 0) * 0.025).toFixed(2)} SOL
                         </span>
                       </div>
                       <div className="border-t border-hairline pt-2">
                         <div className="flex items-center justify-between font-mono text-sm">
                           <span className="text-success">Winner Payout</span>
                           <span className="tabular-nums font-medium text-success">
-                            {((pool?.totalPot ?? 0) * 0.975).toFixed(2)} USDC
+                            {((pool?.totalPot ?? 0) * 0.975).toFixed(2)} SOL
                           </span>
                         </div>
                       </div>

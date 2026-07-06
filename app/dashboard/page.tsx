@@ -79,8 +79,8 @@ function PoolCard({ pool, userAddress, isPast, index, onClick }: PoolCardProps) 
                 <Users className="h-3 w-3" />
                 {pool.memberCount}
               </span>
-              <span className="tabular-nums">{Number(pool.totalStakedUsdc).toLocaleString()} USDC</span>
-              <span className="tabular-nums">{pool.entryFeeUsdc} USDC entry</span>
+              <span className="tabular-nums">{Number(pool.totalStakedUsdc).toLocaleString()} SOL</span>
+              <span className="tabular-nums">{pool.entryFeeUsdc} SOL entry</span>
               {team && (
                 <span className="flex items-center gap-1">
                   <Medal className="h-3 w-3" />

@@ -71,7 +71,7 @@ function EscrowStatus({
           <span className="font-display text-lg tracking-tight">
             {totalPot.toLocaleString("en-US")}{" "}
             <span className="text-[10px] font-mono font-normal text-ink-muted/40">
-              USDC
+              SOL
             </span>
           </span>
         </div>
@@ -80,11 +80,11 @@ function EscrowStatus({
       <div className="mt-2 flex items-center justify-between border-t border-hairline pt-2">
         <div className="flex items-center gap-3 font-mono text-[10px] text-ink-muted/40">
           <span>
-            {participantCount} × {entryFee} USDC
+            {participantCount} × {entryFee} SOL
           </span>
           <span className="text-ink-muted/20">|</span>
           <span>
-            Fee: {feeAmount.toLocaleString("en-US")} USDC ({(fee * 100).toFixed(1)}%)
+            Fee: {feeAmount.toLocaleString("en-US")} SOL ({(fee * 100).toFixed(1)}%)
           </span>
         </div>
         {status === "locked" && (

@@ -4,7 +4,8 @@ import { handleRouteError, ApiError } from "@/lib/errors";
 import { requireAuth } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase";
 import { assignTeam, computeLeaderboard } from "@/lib/pools";
-import { verifyJoinPoolTx } from "@/lib/solana";
+import { verifyJoinPoolTx, verifySolTransfer, derivePoolPDA } from "@/lib/solana";
+import { LAMPORTS_PER_SOL } from "@solana/web3.js";
 import { getAllTeams } from "@/lib/txline";
 import { redis, publishPoolUpdate } from "@/lib/redis";
 import { logger } from "@/lib/logger";
@@ -100,10 +101,12 @@ export async function POST(
         );
       }
 
+      const entryFeeSol = Number(pool.entry_fee_usdc);
       const validJoinTx = await verifyJoinPoolTx(
         stakeTxSignature,
         pool.id,
         wallet,
+        entryFeeSol,
       );
 
       if (!validJoinTx) {
@@ -111,6 +114,23 @@ export async function POST(
           402,
           "JOIN_TX_VERIFICATION_FAILED",
           "Could not verify join pool transaction on-chain",
+        );
+      }
+
+      // Also verify SOL was actually transferred to the pool PDA
+      const [poolPda] = derivePoolPDA(pool.id);
+      const solVerified = await verifySolTransfer(
+        stakeTxSignature,
+        wallet,
+        poolPda.toBase58(),
+        Math.round(entryFeeSol * Number(LAMPORTS_PER_SOL)),
+      );
+
+      if (!solVerified) {
+        throw new ApiError(
+          402,
+          "SOL_TRANSFER_VERIFICATION_FAILED",
+          "Could not verify SOL transfer on-chain",
         );
       }
     }

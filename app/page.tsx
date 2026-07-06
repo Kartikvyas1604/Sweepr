@@ -156,7 +156,7 @@ export default function Home() {
                 />
                   <Input
                     id="entry-fee"
-                    label="Entry Fee (USDC)"
+                    label="Entry Fee (SOL)"
                     placeholder="e.g. 10"
                     type="number"
                     min="0.01"

@@ -5,8 +5,8 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-export function formatUsdc(amount: number): string {
-  return `${amount.toLocaleString("en-US")} USDC`;
+export function formatSol(amount: number): string {
+  return `${amount.toLocaleString("en-US")} SOL`;
 }
 
 export function formatAddress(address: string): string {

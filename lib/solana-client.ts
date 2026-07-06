@@ -4,6 +4,7 @@ import {
   TransactionMessage,
   VersionedTransaction,
   SystemProgram,
+  LAMPORTS_PER_SOL,
 } from "@solana/web3.js";
 import {
   Program,
@@ -16,11 +17,13 @@ import {
   ASSOCIATED_TOKEN_PROGRAM_ID,
 } from "@solana/spl-token";
 
-const USDC_MAINNET_MINT = new PublicKey("Gh9ZwEmdLJ8DscKNTkTqPbNwLNNBjuSzaG9Vp2KGtKJr");
+// NOTE: We're using SOL (native) instead of USDC for devnet.
+// The Anchor program still needs a USDC mint address for account resolution,
+// but since initializePool uses entryFeeUsdc=0, no actual USDC transfer occurs.
 const USDC_DEVNET_MINT = new PublicKey("4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU");
 
-export function getUsdcMintForNetwork(network: string): PublicKey {
-  return network === "mainnet-beta" ? USDC_MAINNET_MINT : USDC_DEVNET_MINT;
+export function getUsdcMintForNetwork(_network: string): PublicKey {
+  return USDC_DEVNET_MINT;
 }
 
 function uuidToBytes(uuid: string): Uint8Array {
@@ -53,13 +56,22 @@ export function teamIdToBytes(teamId: string): number[] {
   return Array.from(bytes);
 }
 
+/**
+ * Build a transaction that sends SOL to the pool PDA (escrow) AND calls the
+ * Anchor program's joinPool instruction (with null USDC accounts, since the
+ * pool was initialized with entryFeeUsdc=0 on-chain).
+ *
+ * The transaction is atomic — if either instruction fails, the whole tx
+ * reverts. The user signs once and the wallet opens once.
+ */
 export async function buildJoinPoolTx(
   poolId: string,
   memberPubkey: PublicKey,
   teamIdBytes: number[],
   programId: PublicKey,
-  usdcMint: PublicKey,
+  _usdcMint: PublicKey,
   connection: Connection,
+  entryFeeSol: number = 0,
 ): Promise<VersionedTransaction> {
   const prog = getReadonlyProgram(programId, connection);
 
@@ -78,46 +90,35 @@ export async function buildJoinPoolTx(
     programId,
   );
 
-  // FIX: escrow vault is an ATA of pool_state (the pool PDA), not a separate PDA
-  const escrowAta = anchorUtils.token.associatedAddress({
-    mint: usdcMint,
-    owner: poolPda,
+  // 1. SOL transfer instruction — sends entry fee to the pool PDA
+  const transferIx = SystemProgram.transfer({
+    fromPubkey: memberPubkey,
+    toPubkey: poolPda,
+    lamports: Math.round(entryFeeSol * LAMPORTS_PER_SOL),
   });
 
-  const pool = await (prog.account as any).poolState.fetch(poolPda);
-  const isPaidPool = pool.entryFeeUsdc.toNumber() > 0;
-
-  const accounts: Record<string, any> = {
-    member: memberPubkey,
-    poolState: poolPda,
-    memberState: memberPda,
-    memberUsdcAta: null,
-    escrowVault: null,
-    usdcMint,
-    tokenProgram: TOKEN_PROGRAM_ID,
-    associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
-    systemProgram: SystemProgram.programId,
-  };
-
-  if (isPaidPool) {
-    const memberUsdcAta = anchorUtils.token.associatedAddress({
-      mint: usdcMint,
-      owner: memberPubkey,
-    });
-    accounts.memberUsdcAta = memberUsdcAta;
-    accounts.escrowVault = escrowAta;
-  }
-
-  const tx = await (prog.methods as any)
+  // 2. Anchor program joinPool instruction — creates MemberState on-chain
+  //    with null USDC accounts (pool was initialized with 0 fee on-chain)
+  const joinPoolIx = await (prog.methods as any)
     .joinPool(Array.from(uuidToBytes(poolId)), teamIdBytes)
-    .accounts(accounts)
-    .transaction();
+    .accounts({
+      member: memberPubkey,
+      poolState: poolPda,
+      memberState: memberPda,
+      memberUsdcAta: null,
+      escrowVault: null,
+      usdcMint: _usdcMint,
+      tokenProgram: TOKEN_PROGRAM_ID,
+      associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+      systemProgram: SystemProgram.programId,
+    })
+    .instruction();
 
   const blockhash = await connection.getLatestBlockhash();
   const message = new TransactionMessage({
     payerKey: memberPubkey,
     recentBlockhash: blockhash.blockhash,
-    instructions: tx.instructions,
+    instructions: [transferIx, joinPoolIx],
   }).compileToV0Message();
 
   return new VersionedTransaction(message);

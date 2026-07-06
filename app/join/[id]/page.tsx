@@ -24,7 +24,7 @@ type Step = "connect" | "name" | "signing" | "draw" | "confirm";
 export default function JoinPage() {
   const params = useParams();
   const router = useRouter();
-  const { address, connected, connect, connecting, getProvider } = useWallet();
+  const { address, connected, connect, connecting, getProvider, ensureAuth } = useWallet();
   const [pool, setPool] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -63,8 +63,12 @@ export default function JoinPage() {
 
       if (isPaid) {
         setStep("signing");
-        setSigStatus("Assigning your team...");
+        setSigStatus("Authenticating...");
 
+        // Ensure we have a valid JWT before making API calls
+        await ensureAuth();
+
+        setSigStatus("Assigning your team...");
         const assignRes = await api.pools.assignTeam(joinCode);
 
         setSigStatus("Building transaction...");
@@ -79,6 +83,9 @@ export default function JoinPage() {
         const programId = new PublicKey(programIdStr);
         const usdcMint = getUsdcMintForNetwork(network);
 
+        // Build a single transaction that sends SOL to escrow AND calls the
+        // Anchor program's joinPool instruction (with null USDC accounts).
+        const entryFeeSol = Number(pool.entryFeeUsdc);
         const tx = await buildJoinPoolTx(
           pool.id,
           provider.publicKey,
@@ -86,6 +93,7 @@ export default function JoinPage() {
           programId,
           usdcMint,
           conn,
+          entryFeeSol,
         );
 
         setSigStatus("Sign in your wallet...");
@@ -108,6 +116,8 @@ export default function JoinPage() {
         setAssignedTeam(result.assignedTeam);
         setStep("confirm");
       } else {
+        // Free pool — ensure auth first
+        await ensureAuth();
         const result = await api.pools.join(joinCode, name.trim());
         setAssignedTeam(result.assignedTeam);
         setStep("confirm");
@@ -222,7 +232,7 @@ export default function JoinPage() {
                           {pool?.entryFeeUsdc}
                         </span>
                         <span className="font-mono text-[9px] uppercase tracking-widest text-ink-muted/40">
-                          Buy-in
+                          SOL
                         </span>
                       </div>
                       <div className="flex flex-col items-center gap-1 rounded-md bg-elevated/30 px-3 py-3">
@@ -271,7 +281,7 @@ export default function JoinPage() {
                         <>
                           <Users className="h-4 w-4" />
                           {Number(pool?.entryFeeUsdc) > 0
-                            ? `Pay ${pool.entryFeeUsdc} USDC & Join`
+                            ? `Pay ${pool.entryFeeUsdc} SOL & Join`
                             : "Join Free"}
                         </>
                       )}

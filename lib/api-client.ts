@@ -1,6 +1,6 @@
 const API_BASE = "";
 
-function getToken(): string | null {
+export function getToken(): string | null {
   if (typeof window === "undefined") return null;
   const token = localStorage.getItem("sweepr_jwt");
   const expiresAt = localStorage.getItem("sweepr_jwt_expires_at");

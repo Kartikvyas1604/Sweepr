@@ -120,8 +120,8 @@ export async function POST(request: Request) {
 
     const { name, entryFeeUsdc, maxMembers } = parsed.data;
 
-    if (entryFeeUsdc > 0 && entryFeeUsdc < 1) {
-      throw new ApiError(400, "INVALID_FEE", "Entry fee must be 0 or at least 1 USDC");
+    if (entryFeeUsdc > 0 && entryFeeUsdc < 0.0001) {
+      throw new ApiError(400, "INVALID_FEE", "Entry fee must be 0 or at least 0.0001 SOL");
     }
 
     const joinCode = await generateJoinCode();
