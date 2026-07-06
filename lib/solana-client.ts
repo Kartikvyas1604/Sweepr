@@ -38,8 +38,9 @@ function uuidToBytes(uuid: string): Uint8Array {
   return bytes;
 }
 
-// SHA256("global:joinPool") first 8 bytes — Anchor instruction discriminator
-const JOIN_POOL_DISCRIMINATOR = new Uint8Array([201, 134, 149, 219, 192, 247, 31, 55]);
+// SHA256("global:join_pool") first 8 bytes — Anchor instruction discriminator.
+// Uses the Rust function name (snake_case), not the IDL/JS name (camelCase).
+const JOIN_POOL_DISCRIMINATOR = new Uint8Array([14, 65, 62, 16, 116, 17, 195, 107]);
 
 function buildJoinPoolInstruction(
   programId: PublicKey,
