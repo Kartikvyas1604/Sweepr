@@ -76,14 +76,23 @@ function extractSignatureBytes(raw: any): Uint8Array | null {
   return null;
 }
 
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) =>
+      setTimeout(() => reject(new Error(`Timed out after ${ms}ms`)), ms),
+    ),
+  ]);
+}
+
 async function signWithProvider(provider: any, message: string): Promise<string | null> {
   const encoded = new TextEncoder().encode(message);
   let result: any;
   try {
-    result = await provider.signMessage(encoded);
+    result = await withTimeout(provider.signMessage(encoded), 120_000);
   } catch {
     try {
-      result = await provider.signMessage(encoded, "utf8");
+      result = await withTimeout(provider.signMessage(encoded, "utf8"), 120_000);
     } catch {
       return null;
     }
@@ -108,10 +117,15 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const doAuth = useCallback(async (provider: any, wallet: string) => {
+    console.log("[doAuth] requesting nonce for", wallet);
     const { nonce, message } = await api.auth.requestNonce(wallet);
+    console.log("[doAuth] got nonce, signing message...");
     const sigEncoded = await signWithProvider(provider, message);
+    console.log("[doAuth] signed, sig length:", sigEncoded?.length);
     const signature = sigEncoded ?? "";
+    console.log("[doAuth] verifying...");
     const { token, expiresAt } = await api.auth.verify(wallet, signature, nonce);
+    console.log("[doAuth] verified, got token:", !!token);
     if (token) setToken(token, expiresAt);
   }, []);
 
@@ -147,21 +161,19 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     const existing = getToken();
     if (existing) return;
     const provider = await getWalletProvider(address);
-    // Always call connect() to establish a wallet session — providers need an
-    // active session before signMessage() works. We verify the connected wallet
-    // matches the expected address to catch extension conflicts (e.g. BagPack
-    // intercepting when Phantom was originally connected).
-    const connectResult = await provider.connect();
-    const wallet = extractWalletAddress(connectResult);
-    if (!wallet) throw new Error("No wallet address available");
-    if (address && wallet !== address) {
-      providerRef.current = null;
-      localStorage.removeItem("sweepr_wallet_id");
-      throw new Error(
-        `Connected wallet ${wallet} does not match expected wallet ${address}. ` +
-        "Please refresh and reconnect with the correct wallet.",
-      );
+    // Get the wallet address without calling connect() a second time.
+    // Wallets like Phantom hang if connect() is called when already connected.
+    let wallet = address;
+    if (!wallet) {
+      const pk = provider.publicKey;
+      if (pk?.toBase58) wallet = pk.toBase58();
+      else if (pk) wallet = pk.toString();
     }
+    if (!wallet) {
+      const connectResult = await provider.connect();
+      wallet = extractWalletAddress(connectResult);
+    }
+    if (!wallet) throw new Error("No wallet address available");
     setAddress(wallet);
     storeWallet(wallet);
     try {

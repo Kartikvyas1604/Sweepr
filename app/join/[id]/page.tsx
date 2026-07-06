@@ -63,16 +63,20 @@ export default function JoinPage() {
 
       if (isPaid) {
         setStep("signing");
+        console.log("[join] ensureAuth...");
         setSigStatus("Authenticating...");
-
-        // Ensure we have a valid JWT before making API calls
         await ensureAuth();
+        console.log("[join] ensureAuth done");
 
+        console.log("[join] assignTeam...");
         setSigStatus("Assigning your team...");
         const assignRes = await api.pools.assignTeam(joinCode);
+        console.log("[join] assignTeam done", assignRes);
 
+        console.log("[join] getProvider...");
         setSigStatus("Building transaction...");
         const provider = await getProvider();
+        console.log("[join] provider publicKey:", provider?.publicKey?.toBase58?.() ?? provider?.publicKey);
 
         const rpc = process.env.NEXT_PUBLIC_SOLANA_RPC;
         if (!rpc) throw new Error("RPC URL not configured");
@@ -83,9 +87,8 @@ export default function JoinPage() {
         const programId = new PublicKey(programIdStr);
         const usdcMint = getUsdcMintForNetwork(network);
 
-        // Build a single transaction that sends SOL to escrow AND calls the
-        // Anchor program's joinPool instruction (with null USDC accounts).
         const entryFeeSol = Number(pool.entryFeeUsdc);
+        console.log("[join] buildJoinPoolTx...", { poolId: pool.id, entryFeeSol });
         const tx = await buildJoinPoolTx(
           pool.id,
           provider.publicKey,
@@ -95,10 +98,14 @@ export default function JoinPage() {
           conn,
           entryFeeSol,
         );
+        console.log("[join] tx built");
 
+        console.log("[join] signTransaction...");
         setSigStatus("Sign in your wallet...");
         const signedTx = await provider.signTransaction(tx);
+        console.log("[join] signed");
 
+        console.log("[join] sendRawTransaction...");
         setSigStatus("Sending to Solana...");
         const sig = await conn.sendRawTransaction(signedTx.serialize());
         setSigStatus("Confirming transaction...");
