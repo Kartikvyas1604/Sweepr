@@ -3,15 +3,10 @@ import {
   PublicKey,
   TransactionMessage,
   VersionedTransaction,
+  TransactionInstruction,
   SystemProgram,
   LAMPORTS_PER_SOL,
 } from "@solana/web3.js";
-import {
-  Program,
-  AnchorProvider,
-  Idl,
-  utils as anchorUtils,
-} from "@coral-xyz/anchor";
 import {
   TOKEN_PROGRAM_ID,
   ASSOCIATED_TOKEN_PROGRAM_ID,
@@ -26,6 +21,14 @@ export function getUsdcMintForNetwork(_network: string): PublicKey {
   return USDC_DEVNET_MINT;
 }
 
+export function teamIdToBytes(teamId: string): number[] {
+  const bytes = new Uint8Array(8);
+  for (let i = 0; i < Math.min(teamId.length, 8); i++) {
+    bytes[i] = teamId.charCodeAt(i);
+  }
+  return Array.from(bytes);
+}
+
 function uuidToBytes(uuid: string): Uint8Array {
   const hex = uuid.replace(/-/g, "");
   const bytes = new Uint8Array(16);
@@ -35,25 +38,40 @@ function uuidToBytes(uuid: string): Uint8Array {
   return bytes;
 }
 
-function getReadonlyProgram(programId: PublicKey, connection: Connection): Program {
-  const throwawayWallet = {
-    publicKey: PublicKey.default,
-    signTransaction: async (tx: any) => { throw new Error("readonly"); },
-    signAllTransactions: async (txs: any[]) => { throw new Error("readonly"); },
-  };
-  const provider = new AnchorProvider(connection, throwawayWallet, {
-    commitment: "confirmed",
-  });
-  const idl = require("@/anchor/idl/sweepr.json") as Idl;
-  return new Program(idl, provider);
-}
+// SHA256("global:joinPool") first 8 bytes — Anchor instruction discriminator
+const JOIN_POOL_DISCRIMINATOR = new Uint8Array([201, 134, 149, 219, 192, 247, 31, 55]);
 
-export function teamIdToBytes(teamId: string): number[] {
-  const bytes = new Uint8Array(8);
-  for (let i = 0; i < Math.min(teamId.length, 8); i++) {
-    bytes[i] = teamId.charCodeAt(i);
-  }
-  return Array.from(bytes);
+function buildJoinPoolInstruction(
+  programId: PublicKey,
+  poolIdBytes: Uint8Array,
+  teamIdBytes: number[],
+  memberPubkey: PublicKey,
+  poolPda: PublicKey,
+  memberPda: PublicKey,
+  usdcMint: PublicKey,
+): TransactionInstruction {
+  // Instruction data = 8-byte discriminator + poolId (16 bytes) + teamId (8 bytes)
+  const data = new Uint8Array(8 + 16 + 8);
+  data.set(JOIN_POOL_DISCRIMINATOR, 0);
+  data.set(poolIdBytes, 8);
+  data.set(teamIdBytes, 8 + 16);
+
+  return new TransactionInstruction({
+    programId,
+    keys: [
+      { pubkey: memberPubkey, isSigner: true, isWritable: true },
+      { pubkey: poolPda, isSigner: false, isWritable: true },
+      { pubkey: memberPda, isSigner: false, isWritable: true },
+      // memberUsdcAta (optional — null for SOL-only flow)
+      { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+      // escrowVault (optional — null for SOL-only flow)
+      { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+      { pubkey: usdcMint, isSigner: false, isWritable: false },
+      { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
+      { pubkey: ASSOCIATED_TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
+      { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+    ],
+  });
 }
 
 /**
@@ -69,50 +87,40 @@ export async function buildJoinPoolTx(
   memberPubkey: PublicKey,
   teamIdBytes: number[],
   programId: PublicKey,
-  _usdcMint: PublicKey,
+  usdcMint: PublicKey,
   connection: Connection,
   entryFeeSol: number = 0,
 ): Promise<VersionedTransaction> {
-  const prog = getReadonlyProgram(programId, connection);
-
   const enc = (s: string) => new TextEncoder().encode(s);
+  const poolIdBytes = uuidToBytes(poolId);
+
   const [poolPda] = PublicKey.findProgramAddressSync(
-    [enc("pool"), uuidToBytes(poolId)],
+    [enc("pool"), poolIdBytes],
     programId,
   );
 
   const [memberPda] = PublicKey.findProgramAddressSync(
     [
       enc("member"),
-      uuidToBytes(poolId),
+      poolIdBytes,
       memberPubkey.toBytes(),
     ],
     programId,
   );
 
-  // 1. SOL transfer instruction — sends entry fee to the pool PDA
+  // 1. SOL transfer — sends entry fee to the pool PDA
   const transferIx = SystemProgram.transfer({
     fromPubkey: memberPubkey,
     toPubkey: poolPda,
     lamports: Math.round(entryFeeSol * LAMPORTS_PER_SOL),
   });
 
-  // 2. Anchor program joinPool instruction — creates MemberState on-chain
-  //    with null USDC accounts (pool was initialized with 0 fee on-chain)
-  const joinPoolIx = await (prog.methods as any)
-    .joinPool(Array.from(uuidToBytes(poolId)), teamIdBytes)
-    .accounts({
-      member: memberPubkey,
-      poolState: poolPda,
-      memberState: memberPda,
-      memberUsdcAta: null,
-      escrowVault: null,
-      usdcMint: _usdcMint,
-      tokenProgram: TOKEN_PROGRAM_ID,
-      associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
-      systemProgram: SystemProgram.programId,
-    })
-    .instruction();
+  // 2. joinPool instruction — built manually to avoid Anchor methods
+  //    builder issues in the browser (no IDL fetch, no resolver RPC calls)
+  const joinPoolIx = buildJoinPoolInstruction(
+    programId, poolIdBytes, teamIdBytes,
+    memberPubkey, poolPda, memberPda, usdcMint,
+  );
 
   const blockhash = await connection.getLatestBlockhash();
   const message = new TransactionMessage({
