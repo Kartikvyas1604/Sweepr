@@ -47,4 +47,13 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# keypairs (never commit these)
 txline-keypair.json
+*.keypair.json
+
+# supabase temp
+supabase/.temp/
+
+# brand preview artifacts
+.brand-preview/
