@@ -18,7 +18,7 @@ function WalletButton({ className }: WalletButtonProps) {
         onClick={disconnect}
         className={cn(
           "group flex items-center gap-2 rounded-md border px-3 py-1.5 font-mono text-[11px] uppercase tracking-wider transition-all duration-200",
-          "border-success/20 bg-success/5 text-success hover:border-success/30 hover:bg-success/10",
+          "border-success/30 bg-success/10 text-success hover:border-success/40 hover:bg-success/15",
           className,
         )}
       >
@@ -38,8 +38,8 @@ function WalletButton({ className }: WalletButtonProps) {
       className={cn(
         "flex items-center gap-2 rounded-md border px-3 py-1.5 font-mono text-[11px] uppercase tracking-wider transition-all duration-200",
         connecting
-          ? "border-hairline/50 text-ink-muted/40 cursor-wait"
-          : "border-hairline text-ink-muted hover:border-ink-muted/30 hover:text-ink",
+          ? "border-muted-foreground/20 text-muted-foreground/40 cursor-wait"
+          : "border text-muted-foreground hover:border-foreground/30 hover:text-foreground",
         className,
       )}
     >

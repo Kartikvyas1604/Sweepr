@@ -133,10 +133,10 @@ export default function SettlePage() {
                       <Lock className="h-16 w-16 text-money/60" />
                     </motion.div>
                     <div className="text-center">
-                      <p className="font-display text-xl uppercase tracking-wider text-ink">
+                      <p className="font-display text-xl uppercase tracking-wider text-foreground">
                         Escrow Locked
                       </p>
-                      <p className="mt-2 font-body text-sm text-ink-muted">
+                      <p className="mt-2 font-body text-sm text-muted-foreground">
                         All matches have finished. The vault is unlocking to
                         determine the champion...
                       </p>
@@ -273,14 +273,14 @@ export default function SettlePage() {
                       <Coins className="h-12 w-12 text-money" />
                     </motion.div>
                     <div className="text-center">
-                      <p className="font-display text-xl uppercase tracking-wider text-ink">
+                      <p className="font-display text-xl uppercase tracking-wider text-foreground">
                         Payout in Progress
                       </p>
-                      <p className="mt-2 font-body text-sm text-ink-muted">
+                      <p className="mt-2 font-body text-sm text-muted-foreground">
                         Broadcasting settlement transaction to Solana...
                       </p>
                     </div>
-                    <div className="flex items-center gap-2 font-mono text-[11px] text-ink-muted/40">
+                    <div className="flex items-center gap-2 font-mono text-[11px] text-muted-foreground/40">
                       <motion.div
                         animate={{ rotate: 360 }}
                         transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
@@ -323,18 +323,18 @@ export default function SettlePage() {
                       </p>
                     </div>
 
-                    <div className="w-full space-y-2 rounded-lg bg-elevated/30 px-4 py-4">
-                      <div className="flex items-center justify-between font-mono text-xs text-ink-muted">
+                    <div className="w-full space-y-2 rounded-lg bg-muted/30 px-4 py-4">
+                      <div className="flex items-center justify-between font-mono text-xs text-muted-foreground">
                         <span>Total Pot</span>
-                        <span className="tabular-nums text-ink">{pool?.totalPot ?? 0} SOL</span>
+                        <span className="tabular-nums text-foreground">{pool?.totalPot ?? 0} SOL</span>
                       </div>
-                      <div className="flex items-center justify-between font-mono text-xs text-ink-muted">
+                      <div className="flex items-center justify-between font-mono text-xs text-muted-foreground">
                         <span>Sweepr Fee (2.5%)</span>
-                        <span className="tabular-nums text-ink">
+                        <span className="tabular-nums text-foreground">
                           {((pool?.totalPot ?? 0) * 0.025).toFixed(2)} SOL
                         </span>
                       </div>
-                      <div className="border-t border-hairline pt-2">
+                      <div className="border-t pt-2">
                         <div className="flex items-center justify-between font-mono text-sm">
                           <span className="text-success">Winner Payout</span>
                           <span className="tabular-nums font-medium text-success">
@@ -345,7 +345,7 @@ export default function SettlePage() {
                     </div>
 
                     <div className="w-full space-y-2">
-                      <div className="flex items-center justify-between rounded-md bg-elevated/30 px-4 py-2.5">
+                      <div className="flex items-center justify-between rounded-md bg-muted/30 px-4 py-2.5">
                         <span className="font-mono text-[10px] uppercase tracking-widest text-ink-muted/40">
                           Transaction
                         </span>
@@ -354,11 +354,11 @@ export default function SettlePage() {
                           <ExternalLink className="h-3 w-3" />
                         </span>
                       </div>
-                      <div className="flex items-center justify-between rounded-md bg-elevated/30 px-4 py-2.5">
-                        <span className="font-mono text-[10px] uppercase tracking-widest text-ink-muted/40">
+                      <div className="flex items-center justify-between rounded-md bg-muted/30 px-4 py-2.5">
+                        <span className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground/40">
                           Winner
                         </span>
-                        <span className="font-mono text-xs text-ink">
+                        <span className="font-mono text-xs text-foreground">
                           {winner?.name} · {winner ? formatAddress(winner.walletAddress) : ""}
                         </span>
                       </div>

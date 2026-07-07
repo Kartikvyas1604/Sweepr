@@ -16,7 +16,7 @@ import { buildJoinPoolTx, getUsdcMintForNetwork, deriveMemberPdaClient } from "@
 import { TopNav } from "@/components/ui/top-nav";
 import {
   Users, DollarSign, Check, Globe, AlertCircle,
-  Wallet, Loader2,
+  Wallet, Loader2, EyeOff,
 } from "lucide-react";
 
 type Step = "connect" | "name" | "signing" | "draw" | "confirm";
@@ -26,10 +26,13 @@ export default function JoinPage() {
   const router = useRouter();
   const { address, connected, connect, connecting, getProvider, ensureAuth } = useWallet();
   const [pool, setPool] = useState<any>(null);
+  const [memberCount, setMemberCount] = useState(0);
+  const [spotsRemaining, setSpotsRemaining] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [step, setStep] = useState<Step>("connect");
   const [name, setName] = useState("");
+  const [passphrase, setPassphrase] = useState("");
   const [joining, setJoining] = useState(false);
   const [sigStatus, setSigStatus] = useState<string | null>(null);
   const [drawTeams, setDrawTeams] = useState<any[]>([]);
@@ -40,6 +43,8 @@ export default function JoinPage() {
     api.pools.get(joinCode)
       .then((data) => {
         setPool(data.pool);
+        setMemberCount(data.memberCount ?? 0);
+        setSpotsRemaining(data.spotsRemaining ?? 0);
       })
       .catch(() => {
         setError("Pool not found");
@@ -158,14 +163,14 @@ export default function JoinPage() {
         }
 
         setSigStatus("Verifying & finalizing...");
-        const result = await api.pools.join(joinCode, name.trim(), sig, assignRes.tempToken);
+        const result = await api.pools.join(joinCode, name.trim(), sig, assignRes.tempToken, passphrase || undefined);
 
         setAssignedTeam(result.assignedTeam);
         setStep("confirm");
       } else {
         // Free pool — ensure auth first
         await ensureAuth();
-        const result = await api.pools.join(joinCode, name.trim());
+        const result = await api.pools.join(joinCode, name.trim(), undefined, undefined, passphrase || undefined);
         setAssignedTeam(result.assignedTeam);
         setStep("confirm");
       }
@@ -183,7 +188,7 @@ export default function JoinPage() {
       <div className="relative flex min-h-dvh flex-col">
         <TopNav title="Join Pool" showBack />
         <main className="relative z-10 flex flex-1 items-center justify-center px-4 py-12">
-          <p className="font-mono text-[11px] text-ink-muted/40">Loading pool...</p>
+          <p className="font-mono text-[11px] text-muted-foreground/40">Loading pool...</p>
         </main>
       </div>
     );
@@ -196,8 +201,8 @@ export default function JoinPage() {
         <main className="relative z-10 flex flex-1 items-center justify-center px-4 py-12">
           <Card>
             <CardContent className="flex flex-col items-center gap-4 py-12">
-              <AlertCircle className="h-8 w-8 text-accent" />
-              <p className="font-display text-sm uppercase tracking-wider text-ink">{error}</p>
+              <AlertCircle className="h-8 w-8 text-primary" />
+              <p className="font-display text-sm uppercase tracking-wider text-foreground">{error}</p>
               <Button size="sm" onClick={() => router.push("/")}>Create a pool</Button>
             </CardContent>
           </Card>
@@ -224,11 +229,11 @@ export default function JoinPage() {
                   <CardHeader>
                     <div className="flex w-full items-center justify-between">
                       <div>
-                        <p className="font-display text-lg uppercase tracking-wider text-ink">
+                        <p className="font-display text-lg uppercase tracking-wider text-foreground">
                           {pool?.name}
                         </p>
-                        <p className="mt-1 flex items-center gap-1.5 font-mono text-[10px] text-ink-muted/40">
-                          <Wallet className="h-3 w-3 text-accent" />
+                        <p className="mt-1 flex items-center gap-1.5 font-mono text-[10px] text-muted-foreground/40">
+                          <Wallet className="h-3 w-3 text-primary" />
                           Connect wallet to join
                         </p>
                       </div>
@@ -261,11 +266,15 @@ export default function JoinPage() {
                   <CardHeader>
                     <div className="flex w-full items-center justify-between">
                       <div>
-                        <p className="font-display text-lg uppercase tracking-wider text-ink">
+                        <p className="font-display text-lg uppercase tracking-wider text-foreground">
                           {pool?.name}
                         </p>
-                        <p className="mt-1 flex items-center gap-1.5 font-mono text-[10px] text-ink-muted/40">
-                          <Globe className="h-3 w-3 text-ink-muted" /> Public
+                        <p className="mt-1 flex items-center gap-1.5 font-mono text-[10px] text-muted-foreground/40">
+                          {pool?.isPrivate ? (
+                            <><EyeOff className="h-3 w-3 text-muted-foreground" /> Private</>
+                          ) : (
+                            <><Globe className="h-3 w-3 text-muted-foreground" /> Public</>
+                          )}
                         </p>
                       </div>
                       <LiveIndicator label="OPEN" />
@@ -273,38 +282,38 @@ export default function JoinPage() {
                   </CardHeader>
                   <CardContent className="flex flex-col gap-6">
                     <div className="grid grid-cols-3 gap-3">
-                      <div className="flex flex-col items-center gap-1 rounded-md bg-elevated/30 px-3 py-3">
+                      <div className="flex flex-col items-center gap-1 rounded-md bg-muted/30 px-3 py-3">
                         <DollarSign className="h-4 w-4 text-money" />
-                        <span className="font-mono text-sm font-medium text-ink">
+                        <span className="font-mono text-sm font-medium text-foreground">
                           {pool?.entryFeeUsdc}
                         </span>
-                        <span className="font-mono text-[9px] uppercase tracking-widest text-ink-muted/40">
+                        <span className="font-mono text-[9px] uppercase tracking-widest text-muted-foreground/40">
                           SOL
                         </span>
                       </div>
-                      <div className="flex flex-col items-center gap-1 rounded-md bg-elevated/30 px-3 py-3">
-                        <Users className="h-4 w-4 text-ink-muted" />
-                        <span className="font-mono text-sm font-medium text-ink">
-                          {pool?.memberCount ?? 0}
+                      <div className="flex flex-col items-center gap-1 rounded-md bg-muted/30 px-3 py-3">
+                        <Users className="h-4 w-4 text-muted-foreground" />
+                        <span className="font-mono text-sm font-medium text-foreground">
+                          {memberCount}
                         </span>
-                        <span className="font-mono text-[9px] uppercase tracking-widest text-ink-muted/40">
+                        <span className="font-mono text-[9px] uppercase tracking-widest text-muted-foreground/40">
                           In
                         </span>
                       </div>
-                      <div className="flex flex-col items-center gap-1 rounded-md bg-elevated/30 px-3 py-3">
-                        <span className="font-mono text-sm font-medium text-ink">
-                          {pool?.spotsRemaining}
+                      <div className="flex flex-col items-center gap-1 rounded-md bg-muted/30 px-3 py-3">
+                        <span className="font-mono text-sm font-medium text-foreground">
+                          {spotsRemaining}
                         </span>
-                        <span className="font-mono text-[9px] uppercase tracking-widest text-ink-muted/40">
+                        <span className="font-mono text-[9px] uppercase tracking-widest text-muted-foreground/40">
                           Spots
                         </span>
                       </div>
                     </div>
 
                     {error && (
-                      <div className="flex items-center gap-2 rounded-md bg-accent/10 px-3 py-2">
-                        <AlertCircle className="h-3.5 w-3.5 shrink-0 text-accent" />
-                        <p className="font-mono text-[11px] text-accent">{error}</p>
+                      <div className="flex items-center gap-2 rounded-md bg-primary/10 px-3 py-2">
+                        <AlertCircle className="h-3.5 w-3.5 shrink-0 text-primary" />
+                        <p className="font-mono text-[11px] text-primary">{error}</p>
                       </div>
                     )}
 
@@ -315,6 +324,16 @@ export default function JoinPage() {
                       value={name}
                       onChange={(e) => setName(e.target.value)}
                     />
+
+                    {pool?.isPrivate && (
+                      <Input
+                        id="passphrase"
+                        label="Pool Passphrase"
+                        placeholder="Enter the pool passphrase"
+                        value={passphrase}
+                        onChange={(e) => setPassphrase(e.target.value)}
+                      />
+                    )}
 
                     <Button
                       size="lg"
@@ -335,7 +354,7 @@ export default function JoinPage() {
                     </Button>
 
                     {Number(pool?.entryFeeUsdc) > 0 && (
-                      <p className="text-center font-mono text-[10px] uppercase tracking-widest text-ink-muted/30">
+                      <p className="text-center font-mono text-[10px] uppercase tracking-widest text-muted-foreground/30">
                         Entry fee held in escrow. Winner takes all minus 5% fee.
                       </p>
                     )}
@@ -357,17 +376,17 @@ export default function JoinPage() {
                       animate={{ rotate: 360 }}
                       transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
                     >
-                      <Loader2 className="h-12 w-12 text-accent" />
+                      <Loader2 className="h-12 w-12 text-primary" />
                     </motion.div>
                     <div className="text-center">
-                      <p className="font-display text-lg uppercase tracking-wider text-ink">
+                      <p className="font-display text-lg uppercase tracking-wider text-foreground">
                         Processing Payment
                       </p>
-                      <p className="mt-2 font-mono text-xs text-ink-muted/60">
+                      <p className="mt-2 font-mono text-xs text-muted-foreground/60">
                         {sigStatus ?? "Sending transaction..."}
                       </p>
                     </div>
-                    <div className="flex gap-1 font-mono text-[10px] text-ink-muted/30">
+                    <div className="flex gap-1 font-mono text-[10px] text-muted-foreground/30">
                       <motion.span
                         animate={{ opacity: [0.3, 1, 0.3] }}
                         transition={{ duration: 1.5, repeat: Infinity }}
@@ -388,9 +407,9 @@ export default function JoinPage() {
                       </motion.span>
                     </div>
                     {error && (
-                      <div className="flex items-center gap-2 rounded-md bg-accent/10 px-3 py-2">
-                        <AlertCircle className="h-3.5 w-3.5 shrink-0 text-accent" />
-                        <p className="font-mono text-[11px] text-accent">{error}</p>
+                      <div className="flex items-center gap-2 rounded-md bg-primary/10 px-3 py-2">
+                        <AlertCircle className="h-3.5 w-3.5 shrink-0 text-primary" />
+                        <p className="font-mono text-[11px] text-primary">{error}</p>
                       </div>
                     )}
                   </CardContent>
@@ -408,7 +427,7 @@ export default function JoinPage() {
                 <Card>
                   <CardHeader>
                     <div className="flex w-full items-center justify-between">
-                      <p className="font-display text-sm uppercase tracking-wider text-ink">
+                      <p className="font-display text-sm uppercase tracking-wider text-foreground">
                         Your Draw
                       </p>
                       <Badge variant="outline" size="sm">
@@ -461,11 +480,11 @@ export default function JoinPage() {
                       <p className="font-display text-2xl uppercase tracking-wider text-money">
                         {assignedTeam.name}
                       </p>
-                      <p className="mt-1 font-body text-sm text-ink-muted">
+                      <p className="mt-1 font-body text-sm text-muted-foreground">
                         You&apos;re cheering for {assignedTeam.name} this Cup.
                       </p>
                       {assignedTeam.group && (
-                        <p className="mt-0.5 font-mono text-[10px] uppercase tracking-widest text-ink-muted/40">
+                        <p className="mt-0.5 font-mono text-[10px] uppercase tracking-widest text-muted-foreground/40">
                           Group {assignedTeam.group}
                         </p>
                       )}

@@ -26,10 +26,10 @@ function EscrowStatus({
   return (
     <div
       className={cn(
-        "rounded-lg border bg-panel px-4 py-3 backdrop-blur-sm",
+        "rounded-lg border bg-card px-4 py-3 backdrop-blur-sm",
         status === "settled"
           ? "border-success/20"
-          : "border-hairline",
+          : "border",
         className,
       )}
     >
@@ -67,22 +67,22 @@ function EscrowStatus({
           </span>
         </div>
 
-        <div className="flex items-center gap-3 font-mono text-xs tabular-nums text-ink">
+        <div className="flex items-center gap-3 font-mono text-xs tabular-nums text-foreground">
           <span className="font-display text-lg tracking-tight">
             {totalPot.toLocaleString("en-US")}{" "}
-            <span className="text-[10px] font-mono font-normal text-ink-muted/40">
+            <span className="text-[10px] font-mono font-normal text-muted-foreground/40">
               SOL
             </span>
           </span>
         </div>
       </div>
 
-      <div className="mt-2 flex items-center justify-between border-t border-hairline pt-2">
-        <div className="flex items-center gap-3 font-mono text-[10px] text-ink-muted/40">
+      <div className="mt-2 flex items-center justify-between border-t border pt-2">
+        <div className="flex items-center gap-3 font-mono text-[10px] text-muted-foreground/40">
           <span>
             {participantCount} × {entryFee} SOL
           </span>
-          <span className="text-ink-muted/20">|</span>
+          <span className="text-muted-foreground/20">|</span>
           <span>
             Fee: {feeAmount.toLocaleString("en-US")} SOL ({(fee * 100).toFixed(1)}%)
           </span>

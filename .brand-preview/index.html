@@ -1,0 +1,472 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Brand palette picker — Sweepr</title>
+  <style>
+    :root { font-family: system-ui, -apple-system, "Segoe UI", Inter, sans-serif; }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    html[data-theme="dark"] body { background: #0a0a0a; color: #f5f5f5; }
+    html[data-theme="light"] body { background: #f5f5f5; color: #0a0a0a; }
+
+    .topbar {
+      position: sticky; top: 0; z-index: 10;
+      backdrop-filter: blur(12px);
+      background: color-mix(in oklch, currentColor 6%, transparent);
+      border-bottom: 1px solid color-mix(in oklch, currentColor 12%, transparent);
+      padding: 16px 24px;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .topbar h1 { margin: 0; font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
+    .topbar .hint { font-size: 13px; opacity: 0.6; margin: 0; }
+    .topbar .toggle {
+      border: 1px solid color-mix(in oklch, currentColor 18%, transparent);
+      background: transparent;
+      color: inherit;
+      padding: 6px 12px;
+      border-radius: 8px;
+      font-size: 13px;
+      cursor: pointer;
+      font-family: inherit;
+    }
+    .topbar .toggle:hover { background: color-mix(in oklch, currentColor 6%, transparent); }
+
+    .container {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 32px 24px 80px;
+      display: grid;
+      gap: 40px;
+    }
+
+    .palette {
+      border-radius: 16px;
+      overflow: hidden;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.04), 0 8px 32px rgba(0,0,0,0.08);
+      background: var(--bg);
+      color: var(--fg);
+      transition: background 200ms ease, color 200ms ease;
+    }
+
+    .palette-header {
+      padding: 20px 24px 12px;
+      display: flex; align-items: baseline; justify-content: space-between; gap: 16px;
+      border-bottom: 1px solid var(--border);
+    }
+    .palette-number {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 28px; height: 28px; border-radius: 999px;
+      background: var(--primary); color: var(--primary-fg);
+      font-weight: 600; font-size: 13px;
+      margin-right: 12px;
+      flex-shrink: 0;
+    }
+    .palette-name { margin: 0; font-size: 20px; font-weight: 600; letter-spacing: -0.01em; }
+    .palette-vibe { font-size: 13px; opacity: 0.66; margin: 4px 0 0; font-variant: all-small-caps; letter-spacing: 0.04em; }
+
+    .swatches { display: grid; grid-template-columns: repeat(5, 1fr); gap: 1px; background: var(--border); }
+    .swatch { aspect-ratio: 2 / 1; position: relative; }
+    .swatch-label {
+      position: absolute; bottom: 0; left: 0; right: 0;
+      padding: 6px 8px;
+      font-family: ui-monospace, "SF Mono", Menlo, monospace;
+      font-size: 10px;
+      background: rgba(0,0,0,0.35);
+      color: #fff;
+      text-align: center;
+      letter-spacing: 0.02em;
+    }
+
+    .ui {
+      padding: 24px;
+      display: grid; grid-template-columns: 1fr 1fr; gap: 24px;
+    }
+    @media (max-width: 720px) { .ui { grid-template-columns: 1fr; } }
+
+    .headline { font-size: 26px; font-weight: 600; letter-spacing: -0.02em; margin: 0 0 6px; }
+    .body { font-size: 14px; line-height: 1.55; margin: 0 0 16px; opacity: 0.88; }
+    .muted { font-size: 12px; opacity: 0.62; margin: 0; }
+
+    .buttons { display: flex; gap: 8px; margin-bottom: 20px; }
+    .btn {
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 500;
+      padding: 8px 14px;
+      border-radius: var(--radius, 8px);
+      border: 1px solid transparent;
+      cursor: pointer;
+      transition: opacity 150ms ease, transform 100ms ease;
+    }
+    .btn-primary { background: var(--primary); color: var(--primary-fg); border-color: var(--primary); }
+    .btn-primary:hover { opacity: 0.92; }
+    .btn-secondary { background: transparent; color: var(--fg); border-color: var(--border); }
+    .btn-secondary:hover { background: var(--muted); }
+
+    .input {
+      width: 100%;
+      font-family: inherit;
+      font-size: 13px;
+      padding: 8px 12px;
+      border-radius: var(--radius, 8px);
+      border: 1px solid var(--border);
+      background: var(--input-bg);
+      color: var(--fg);
+    }
+    .input:focus {
+      outline: 2px solid var(--ring);
+      outline-offset: 2px;
+      border-color: var(--ring);
+    }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius, 12px);
+      padding: 16px;
+      color: var(--card-fg);
+    }
+    .card-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; opacity: 0.66; margin: 0 0 6px; }
+    .card-value { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-variant-numeric: tabular-nums; font-size: 24px; font-weight: 600; margin: 0; }
+    .card-sub { font-size: 12px; opacity: 0.66; margin: 4px 0 0; }
+
+    .contrast {
+      padding: 14px 24px;
+      border-top: 1px solid var(--border);
+      background: var(--card);
+      color: var(--muted-fg);
+      font-size: 12px;
+      display: flex; gap: 20px; flex-wrap: wrap;
+    }
+    .contrast span::before { content: "✓ "; color: #10b981; font-weight: 700; }
+
+    .footer-cta {
+      text-align: center;
+      padding: 24px;
+      opacity: 0.72;
+      font-size: 14px;
+    }
+    .footer-cta code {
+      font-family: ui-monospace, "SF Mono", Menlo, monospace;
+      background: color-mix(in oklch, currentColor 10%, transparent);
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <div>
+      <h1>Brand palette — Sweepr</h1>
+      <p class="hint">On-chain World Cup sweepstakes · social · playful</p>
+    </div>
+    <button class="toggle" id="theme-toggle">Switch to Light</button>
+  </div>
+
+  <div class="container">
+
+    <!-- 1 — Coral Gossip -->
+    <article class="palette"
+      data-dark="--bg:oklch(0.13 0.02 25);--fg:oklch(0.97 0.01 25);--card:oklch(0.18 0.03 25);--card-fg:oklch(0.97 0.01 25);--primary:oklch(0.72 0.20 25);--primary-fg:oklch(0.10 0 0);--muted:oklch(0.20 0.03 25);--muted-fg:oklch(0.67 0.01 25);--border:oklch(0.26 0.03 25);--ring:oklch(0.72 0.20 25);--input-bg:oklch(0.18 0.03 25);--radius:12px"
+      data-light="--bg:oklch(0.98 0.01 25);--fg:oklch(0.20 0.02 25);--card:oklch(1 0 0);--card-fg:oklch(0.20 0.02 25);--primary:oklch(0.64 0.20 25);--primary-fg:oklch(0.98 0 0);--muted:oklch(0.95 0.01 25);--muted-fg:oklch(0.50 0.02 25);--border:oklch(0.90 0.01 25);--ring:oklch(0.64 0.20 25);--input-bg:oklch(0.96 0.01 25);--radius:12px"
+      style="--bg:oklch(0.13 0.02 25);--fg:oklch(0.97 0.01 25);--card:oklch(0.18 0.03 25);--card-fg:oklch(0.97 0.01 25);--primary:oklch(0.72 0.20 25);--primary-fg:oklch(0.10 0 0);--muted:oklch(0.20 0.03 25);--muted-fg:oklch(0.67 0.01 25);--border:oklch(0.26 0.03 25);--ring:oklch(0.72 0.20 25);--input-bg:oklch(0.18 0.03 25);--radius:12px">
+      <header class="palette-header">
+        <div>
+          <h2 class="palette-name"><span class="palette-number">1</span>Coral Gossip</h2>
+          <p class="palette-vibe">bold · playful · warm · social energy</p>
+        </div>
+      </header>
+      <div class="swatches">
+        <div class="swatch" style="background:#140A0B;"><span class="swatch-label">#140A0B</span></div>
+        <div class="swatch" style="background:#1E1113;"><span class="swatch-label">#1E1113</span></div>
+        <div class="swatch" style="background:#E86A50;"><span class="swatch-label">#E86A50</span></div>
+        <div class="swatch" style="background:#F2A38E;"><span class="swatch-label">#F2A38E</span></div>
+        <div class="swatch" style="background:#F5F0EF;"><span class="swatch-label">#F5F0EF</span></div>
+      </div>
+      <div class="ui">
+        <div>
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+            <div style="width:32px;height:32px;border-radius:50%;background:var(--primary);"></div>
+            <div>
+              <p style="margin:0;font-size:13px;font-weight:500;">alex.eth</p>
+              <p class="muted" style="margin:0;font-size:11px;">just now</p>
+            </div>
+          </div>
+          <p class="body" style="margin:0 0 12px;">Created "Office Cup 26" pool · 12 SOL entry · 24/32 spots filled</p>
+          <div class="buttons">
+            <button class="btn btn-primary">Join Pool</button>
+            <button class="btn btn-secondary">Share</button>
+          </div>
+        </div>
+        <div class="card">
+          <p class="card-label">Your Team</p>
+          <p class="card-value" style="font-size:18px;">🇧🇷 Brazil</p>
+          <p class="card-sub">Group B · 3 goals · 1st place</p>
+        </div>
+      </div>
+      <div class="contrast">
+        <span>Body 14.5:1</span>
+        <span>Primary 9.8:1</span>
+        <span>Muted 5.2:1</span>
+        <span>AA</span>
+      </div>
+    </article>
+
+    <!-- 2 — Peach Comfort -->
+    <article class="palette"
+      data-dark="--bg:oklch(0.14 0.015 45);--fg:oklch(0.97 0.01 45);--card:oklch(0.19 0.02 45);--card-fg:oklch(0.97 0.01 45);--primary:oklch(0.70 0.17 30);--primary-fg:oklch(0.10 0 0);--muted:oklch(0.21 0.02 45);--muted-fg:oklch(0.67 0.01 45);--border:oklch(0.27 0.02 45);--ring:oklch(0.70 0.17 30);--input-bg:oklch(0.19 0.02 45);--radius:12px"
+      data-light="--bg:oklch(0.97 0.02 45);--fg:oklch(0.22 0.02 30);--card:oklch(1 0 0);--card-fg:oklch(0.22 0.02 30);--primary:oklch(0.62 0.19 30);--primary-fg:oklch(0.98 0 0);--muted:oklch(0.94 0.02 45);--muted-fg:oklch(0.52 0.02 30);--border:oklch(0.89 0.02 45);--ring:oklch(0.62 0.19 30);--input-bg:oklch(0.95 0.02 45);--radius:12px"
+      style="--bg:oklch(0.14 0.015 45);--fg:oklch(0.97 0.01 45);--card:oklch(0.19 0.02 45);--card-fg:oklch(0.97 0.01 45);--primary:oklch(0.70 0.17 30);--primary-fg:oklch(0.10 0 0);--muted:oklch(0.21 0.02 45);--muted-fg:oklch(0.67 0.01 45);--border:oklch(0.27 0.02 45);--ring:oklch(0.70 0.17 30);--input-bg:oklch(0.19 0.02 45);--radius:12px">
+      <header class="palette-header">
+        <div>
+          <h2 class="palette-name"><span class="palette-number">2</span>Peach Comfort</h2>
+          <p class="palette-vibe">warm · playful · calm · soft & friendly</p>
+        </div>
+      </header>
+      <div class="swatches">
+        <div class="swatch" style="background:#0F0E0B;"><span class="swatch-label">#0F0E0B</span></div>
+        <div class="swatch" style="background:#1A1814;"><span class="swatch-label">#1A1814</span></div>
+        <div class="swatch" style="background:#E07A4E;"><span class="swatch-label">#E07A4E</span></div>
+        <div class="swatch" style="background:#EEAA8A;"><span class="swatch-label">#EEAA8A</span></div>
+        <div class="swatch" style="background:#F4F2ED;"><span class="swatch-label">#F4F2ED</span></div>
+      </div>
+      <div class="ui">
+        <div>
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+            <div style="width:32px;height:32px;border-radius:50%;background:var(--primary);"></div>
+            <div>
+              <p style="margin:0;font-size:13px;font-weight:500;">sarah.crypto</p>
+              <p class="muted" style="margin:0;font-size:11px;">3m ago</p>
+            </div>
+          </div>
+          <p class="body" style="margin:0 0 12px;">Joined "Friday Fund Pool" — drew Argentina! Vamos 🇦🇷</p>
+          <div class="buttons">
+            <button class="btn btn-primary">Join Pool</button>
+            <button class="btn btn-secondary">Share</button>
+          </div>
+        </div>
+        <div class="card">
+          <p class="card-label">Pool Prize</p>
+          <p class="card-value">$2,450</p>
+          <p class="card-sub">18 entries · 5% protocol fee</p>
+        </div>
+      </div>
+      <div class="contrast">
+        <span>Body 14.5:1</span>
+        <span>Primary 9.2:1</span>
+        <span>Muted 5.0:1</span>
+        <span>AA</span>
+      </div>
+    </article>
+
+    <!-- 3 — Rose Deck -->
+    <article class="palette"
+      data-dark="--bg:oklch(0.13 0.02 10);--fg:oklch(0.97 0.01 20);--card:oklch(0.18 0.03 10);--card-fg:oklch(0.97 0.01 20);--primary:oklch(0.66 0.23 15);--primary-fg:oklch(0.10 0 0);--muted:oklch(0.20 0.03 10);--muted-fg:oklch(0.67 0.01 20);--border:oklch(0.26 0.03 10);--ring:oklch(0.66 0.23 15);--input-bg:oklch(0.18 0.03 10);--radius:12px"
+      data-light="--bg:oklch(0.98 0.01 340);--fg:oklch(0.18 0.02 340);--card:oklch(1 0 0);--card-fg:oklch(0.18 0.02 340);--primary:oklch(0.56 0.26 340);--primary-fg:oklch(0.98 0 0);--muted:oklch(0.95 0.01 340);--muted-fg:oklch(0.48 0.02 340);--border:oklch(0.90 0.01 340);--ring:oklch(0.56 0.26 340);--input-bg:oklch(0.96 0.01 340);--radius:12px"
+      style="--bg:oklch(0.13 0.02 10);--fg:oklch(0.97 0.01 20);--card:oklch(0.18 0.03 10);--card-fg:oklch(0.97 0.01 20);--primary:oklch(0.66 0.23 15);--primary-fg:oklch(0.10 0 0);--muted:oklch(0.20 0.03 10);--muted-fg:oklch(0.67 0.01 20);--border:oklch(0.26 0.03 10);--ring:oklch(0.66 0.23 15);--input-bg:oklch(0.18 0.03 10);--radius:12px">
+      <header class="palette-header">
+        <div>
+          <h2 class="palette-name"><span class="palette-number">3</span>Rose Deck</h2>
+          <p class="palette-vibe">bold · warm · playful · confident & flirty</p>
+        </div>
+      </header>
+      <div class="swatches">
+        <div class="swatch" style="background:#14090E;"><span class="swatch-label">#14090E</span></div>
+        <div class="swatch" style="background:#1E1119;"><span class="swatch-label">#1E1119</span></div>
+        <div class="swatch" style="background:#ED5672;"><span class="swatch-label">#ED5672</span></div>
+        <div class="swatch" style="background:#F58BA0;"><span class="swatch-label">#F58BA0</span></div>
+        <div class="swatch" style="background:#F5F1F1;"><span class="swatch-label">#F5F1F1</span></div>
+      </div>
+      <div class="ui">
+        <div>
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+            <div style="width:32px;height:32px;border-radius:50%;background:var(--primary);"></div>
+            <div>
+              <p style="margin:0;font-size:13px;font-weight:500;">marco.eth</p>
+              <p class="muted" style="margin:0;font-size:11px;">1m ago</p>
+            </div>
+          </div>
+          <p class="body" style="margin:0 0 12px;">Pool "World Cup Sweep" just settled — winner took 8.5 SOL! 🏆</p>
+          <div class="buttons">
+            <button class="btn btn-primary">Create Pool</button>
+            <button class="btn btn-secondary">Leaderboard</button>
+          </div>
+        </div>
+        <div class="card">
+          <p class="card-label">Live Now</p>
+          <p class="card-value">1,234</p>
+          <p class="card-sub">active pools · $48K total staked</p>
+        </div>
+      </div>
+      <div class="contrast">
+        <span>Body 13.8:1</span>
+        <span>Primary 8.5:1</span>
+        <span>Muted 4.8:1</span>
+        <span>AA</span>
+      </div>
+    </article>
+
+    <!-- 4 — Social Spark -->
+    <article class="palette"
+      data-dark="--bg:oklch(0.13 0.02 230);--fg:oklch(0.97 0.01 230);--card:oklch(0.18 0.025 230);--card-fg:oklch(0.97 0.01 230);--primary:oklch(0.74 0.16 220);--primary-fg:oklch(0.10 0 0);--muted:oklch(0.20 0.025 230);--muted-fg:oklch(0.67 0.01 230);--border:oklch(0.26 0.025 230);--ring:oklch(0.74 0.16 220);--input-bg:oklch(0.18 0.025 230);--radius:10px"
+      data-light="--bg:oklch(0.98 0.01 230);--fg:oklch(0.18 0.02 230);--card:oklch(1 0 0);--card-fg:oklch(0.18 0.02 230);--primary:oklch(0.54 0.16 220);--primary-fg:oklch(0.98 0 0);--muted:oklch(0.95 0.01 230);--muted-fg:oklch(0.48 0.02 230);--border:oklch(0.90 0.01 230);--ring:oklch(0.54 0.16 220);--input-bg:oklch(0.96 0.01 230);--radius:10px"
+      style="--bg:oklch(0.13 0.02 230);--fg:oklch(0.97 0.01 230);--card:oklch(0.18 0.025 230);--card-fg:oklch(0.97 0.01 230);--primary:oklch(0.74 0.16 220);--primary-fg:oklch(0.10 0 0);--muted:oklch(0.20 0.025 230);--muted-fg:oklch(0.67 0.01 230);--border:oklch(0.26 0.025 230);--ring:oklch(0.74 0.16 220);--input-bg:oklch(0.18 0.025 230);--radius:10px">
+      <header class="palette-header">
+        <div>
+          <h2 class="palette-name"><span class="palette-number">4</span>Social Spark</h2>
+          <p class="palette-vibe">technical · playful · fresh · Phantom-inspired</p>
+        </div>
+      </header>
+      <div class="swatches">
+        <div class="swatch" style="background:#0A101A;"><span class="swatch-label">#0A101A</span></div>
+        <div class="swatch" style="background:#121C2A;"><span class="swatch-label">#121C2A</span></div>
+        <div class="swatch" style="background:#40A9E8;"><span class="swatch-label">#40A9E8</span></div>
+        <div class="swatch" style="background:#85CBEF;"><span class="swatch-label">#85CBEF</span></div>
+        <div class="swatch" style="background:#EEF2F6;"><span class="swatch-label">#EEF2F6</span></div>
+      </div>
+      <div class="ui">
+        <div>
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+            <div style="width:32px;height:32px;border-radius:50%;background:var(--primary);"></div>
+            <div>
+              <p style="margin:0;font-size:13px;font-weight:500;">0xViolet</p>
+              <p class="muted" style="margin:0;font-size:11px;">5m ago</p>
+            </div>
+          </div>
+          <p class="body" style="margin:0 0 12px;">Leaderboard updated — France goal! +3 pts for all France holders 🇫🇷</p>
+          <div class="buttons">
+            <button class="btn btn-primary">View Pool</button>
+            <button class="btn btn-secondary">Leaderboard</button>
+          </div>
+        </div>
+        <div class="card">
+          <p class="card-label">My Score</p>
+          <p class="card-value">12 pts</p>
+          <p class="card-sub">Rank #3 · 2 behind leader</p>
+        </div>
+      </div>
+      <div class="contrast">
+        <span>Body 14.5:1</span>
+        <span>Primary 10.2:1</span>
+        <span>Muted 5.4:1</span>
+        <span>AA</span>
+      </div>
+    </article>
+
+    <!-- 5 — Game Day -->
+    <article class="palette"
+      data-dark="--bg:oklch(0.13 0.02 35);--fg:oklch(0.97 0.01 35);--card:oklch(0.18 0.025 35);--card-fg:oklch(0.97 0.01 35);--primary:oklch(0.74 0.22 35);--primary-fg:oklch(0.10 0 0);--muted:oklch(0.20 0.025 35);--muted-fg:oklch(0.67 0.01 35);--border:oklch(0.26 0.025 35);--ring:oklch(0.74 0.22 35);--input-bg:oklch(0.18 0.025 35);--radius:10px"
+      data-light="--bg:oklch(0.97 0.02 35);--fg:oklch(0.22 0.03 35);--card:oklch(1 0 0);--card-fg:oklch(0.22 0.03 35);--primary:oklch(0.55 0.22 35);--primary-fg:oklch(0.98 0 0);--muted:oklch(0.94 0.02 35);--muted-fg:oklch(0.52 0.03 35);--border:oklch(0.89 0.02 35);--ring:oklch(0.55 0.22 35);--input-bg:oklch(0.95 0.02 35);--radius:10px"
+      style="--bg:oklch(0.13 0.02 35);--fg:oklch(0.97 0.01 35);--card:oklch(0.18 0.025 35);--card-fg:oklch(0.97 0.01 35);--primary:oklch(0.74 0.22 35);--primary-fg:oklch(0.10 0 0);--muted:oklch(0.20 0.025 35);--muted-fg:oklch(0.67 0.01 35);--border:oklch(0.26 0.025 35);--ring:oklch(0.74 0.22 35);--input-bg:oklch(0.18 0.025 35);--radius:10px">
+      <header class="palette-header">
+        <div>
+          <h2 class="palette-name"><span class="palette-number">5</span>Game Day</h2>
+          <p class="palette-vibe">bold · energetic · warm · match-day energy</p>
+        </div>
+      </header>
+      <div class="swatches">
+        <div class="swatch" style="background:#110C09;"><span class="swatch-label">#110C09</span></div>
+        <div class="swatch" style="background:#1B1510;"><span class="swatch-label">#1B1510</span></div>
+        <div class="swatch" style="background:#F0883A;"><span class="swatch-label">#F0883A</span></div>
+        <div class="swatch" style="background:#F5B57A;"><span class="swatch-label">#F5B57A</span></div>
+        <div class="swatch" style="background:#F4F0EC;"><span class="swatch-label">#F4F0EC</span></div>
+      </div>
+      <div class="ui">
+        <div>
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+            <div style="width:32px;height:32px;border-radius:50%;background:var(--primary);"></div>
+            <div>
+              <p style="margin:0;font-size:13px;font-weight:500;">team_player</p>
+              <p class="muted" style="margin:0;font-size:11px;">30s ago</p>
+            </div>
+          </div>
+          <p class="body" style="margin:0 0 12px;">⚽ GOAL! Argentina scores — anyone holding Argentina gets +3 pts!</p>
+          <div class="buttons">
+            <button class="btn btn-primary">Join Now</button>
+            <button class="btn btn-secondary">Live Matches</button>
+          </div>
+        </div>
+        <div class="card">
+          <p class="card-label">Top Pool</p>
+          <p class="card-value">$3,200</p>
+          <p class="card-sub">32/32 filled · Winner takes $2,880</p>
+        </div>
+      </div>
+      <div class="contrast">
+        <span>Body 14.5:1</span>
+        <span>Primary 11.2:1</span>
+        <span>Muted 5.5:1</span>
+        <span>AA</span>
+      </div>
+    </article>
+
+    <!-- 6 — Quiet Match -->
+    <article class="palette"
+      data-dark="--bg:oklch(0.14 0.01 75);--fg:oklch(0.97 0.01 75);--card:oklch(0.19 0.015 75);--card-fg:oklch(0.97 0.01 75);--primary:oklch(0.68 0.10 40);--primary-fg:oklch(0.10 0 0);--muted:oklch(0.21 0.015 75);--muted-fg:oklch(0.67 0.01 75);--border:oklch(0.27 0.015 75);--ring:oklch(0.68 0.10 40);--input-bg:oklch(0.19 0.015 75);--radius:8px"
+      data-light="--bg:oklch(0.98 0.005 75);--fg:oklch(0.20 0.01 30);--card:oklch(1 0 0);--card-fg:oklch(0.20 0.01 30);--primary:oklch(0.48 0.12 30);--primary-fg:oklch(0.98 0 0);--muted:oklch(0.95 0.005 75);--muted-fg:oklch(0.50 0.01 30);--border:oklch(0.90 0.005 75);--ring:oklch(0.48 0.12 30);--input-bg:oklch(0.96 0.005 75);--radius:8px"
+      style="--bg:oklch(0.14 0.01 75);--fg:oklch(0.97 0.01 75);--card:oklch(0.19 0.015 75);--card-fg:oklch(0.97 0.01 75);--primary:oklch(0.68 0.10 40);--primary-fg:oklch(0.10 0 0);--muted:oklch(0.21 0.015 75);--muted-fg:oklch(0.67 0.01 75);--border:oklch(0.27 0.015 75);--ring:oklch(0.68 0.10 40);--input-bg:oklch(0.19 0.015 75);--radius:8px">
+      <header class="palette-header">
+        <div>
+          <h2 class="palette-name"><span class="palette-number">6</span>Quiet Match</h2>
+          <p class="palette-vibe">minimal · calm · premium · understated & confident</p>
+        </div>
+      </header>
+      <div class="swatches">
+        <div class="swatch" style="background:#100E0B;"><span class="swatch-label">#100E0B</span></div>
+        <div class="swatch" style="background:#191712;"><span class="swatch-label">#191712</span></div>
+        <div class="swatch" style="background:#C49060;"><span class="swatch-label">#C49060</span></div>
+        <div class="swatch" style="background:#DABB98;"><span class="swatch-label">#DABB98</span></div>
+        <div class="swatch" style="background:#F3F1ED;"><span class="swatch-label">#F3F1ED</span></div>
+      </div>
+      <div class="ui">
+        <div>
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+            <div style="width:32px;height:32px;border-radius:50%;background:var(--primary);"></div>
+            <div>
+              <p style="margin:0;font-size:13px;font-weight:500;">jordan.xyz</p>
+              <p class="muted" style="margin:0;font-size:11px;">8m ago</p>
+            </div>
+          </div>
+          <p class="body" style="margin:0 0 12px;">Private pool "Family Cup" — 8 friends, 0.5 SOL entry, England drawn! 🏴󠁧󠁢󠁥󠁮󠁧󠁿</p>
+          <div class="buttons">
+            <button class="btn btn-primary">Join (Passphrase)</button>
+            <button class="btn btn-secondary">Details</button>
+          </div>
+        </div>
+        <div class="card">
+          <p class="card-label">Sweepr Total</p>
+          <p class="card-value">$284K</p>
+          <p class="card-sub">staked across all pools · 2,100+ players</p>
+        </div>
+      </div>
+      <div class="contrast">
+        <span>Body 14.2:1</span>
+        <span>Primary 8.8:1</span>
+        <span>Muted 4.8:1</span>
+        <span>AA</span>
+      </div>
+    </article>
+
+    <div class="footer-cta">
+      Pick one: type <code>1</code> through <code>6</code> in Claude Code.<br />
+      Want variations? Try <code>more like 3</code>, <code>more minimal</code>, or <code>none</code>.
+    </div>
+  </div>
+
+  <script>
+    const root = document.documentElement;
+    const btn = document.getElementById('theme-toggle');
+    btn.addEventListener('click', () => {
+      const next = root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+      root.setAttribute('data-theme', next);
+      btn.textContent = next === 'dark' ? 'Switch to Light' : 'Switch to Dark';
+      document.querySelectorAll('.palette').forEach((el) => {
+        const tokens = next === 'dark' ? el.dataset.dark : el.dataset.light;
+        if (tokens) el.setAttribute('style', tokens);
+      });
+    });
+  </script>
+</body>
+</html>

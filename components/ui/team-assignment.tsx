@@ -54,7 +54,7 @@ function TeamAssignment({ onAssigned, participantName }: TeamAssignmentProps) {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
           >
-            <div className="flex h-28 w-28 items-center justify-center rounded-full border-2 border-dashed border-hairline">
+            <div className="flex h-28 w-28 items-center justify-center rounded-full border-2 border-dashed">
               <span className="font-display text-4xl text-ink-muted/40">?</span>
             </div>
             <p className="text-center font-body text-sm leading-relaxed text-ink-muted">

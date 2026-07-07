@@ -83,6 +83,7 @@ export async function GET(request: Request) {
           createdAt: pool.created_at,
           winnerWallet: pool.winner_wallet,
           settlementTx: pool.settlement_tx,
+          isPrivate: pool.is_private,
           ...(myMember ? {
             myTeam: {
               teamId: myMember.team_id,
@@ -105,6 +106,8 @@ const bodySchema = z.object({
   name: z.string().min(3).max(60),
   entryFeeUsdc: z.number().min(0),
   maxMembers: z.number().int().min(2).max(32).default(32),
+  isPrivate: z.boolean().default(false),
+  passphrase: z.string().min(1).max(100).optional().nullable(),
 });
 
 export async function POST(request: Request) {
@@ -118,7 +121,7 @@ export async function POST(request: Request) {
       return handleRouteError(parsed.error);
     }
 
-    const { name, entryFeeUsdc, maxMembers } = parsed.data;
+    const { name, entryFeeUsdc, maxMembers, isPrivate, passphrase } = parsed.data;
 
     if (entryFeeUsdc > 0 && entryFeeUsdc < 0.0001) {
       throw new ApiError(400, "INVALID_FEE", "Entry fee must be 0 or at least 0.0001 SOL");
@@ -144,6 +147,8 @@ export async function POST(request: Request) {
         max_members: maxMembers,
         escrow_pda: escrowPda,
         status: "waiting",
+        is_private: isPrivate,
+        passphrase: isPrivate ? (passphrase ?? null) : null,
       })
       .select()
       .single();
@@ -178,6 +183,8 @@ export async function POST(request: Request) {
         maxMembers: pool.max_members,
         escrowPda: pool.escrow_pda,
         createdAt: pool.created_at,
+        isPrivate: pool.is_private,
+        passphrase: pool.passphrase,
       },
       joinUrl: `${env.NEXT_PUBLIC_APP_URL}/join/${joinCode}`,
     });

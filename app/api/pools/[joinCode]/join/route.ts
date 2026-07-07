@@ -16,6 +16,7 @@ const bodySchema = z.object({
   displayName: z.string().min(1).max(40),
   stakeTxSignature: z.string().optional(),
   tempToken: z.string().optional(),
+  passphrase: z.string().optional(),
 });
 
 const DUPLICATE_JOIN_CODE = "23505"; // unique_violation
@@ -50,6 +51,13 @@ export async function POST(
 
     if (pool.status === "settled" || pool.status === "onchain_failed") {
       throw new ApiError(409, "POOL_SETTLED", "This pool has already been settled or failed");
+    }
+
+    // Validate passphrase for private pools
+    if (pool.is_private && pool.passphrase) {
+      if (!parsed.data.passphrase || parsed.data.passphrase !== pool.passphrase) {
+        throw new ApiError(403, "INVALID_PASSPHRASE", "Incorrect pool passphrase");
+      }
     }
 
     // Check pool capacity (best-effort — race window exists but is extremely narrow)

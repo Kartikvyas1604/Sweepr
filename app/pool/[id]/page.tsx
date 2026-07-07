@@ -13,7 +13,7 @@ import { GoalOverlay } from "@/components/ui/goal-overlay";
 import { TopNav } from "@/components/ui/top-nav";
 import { ShareButton } from "@/components/ui/share-button";
 import { api } from "@/lib/api-client";
-import { Trophy, Goal, AlertCircle, Globe, Coins, Sparkles } from "lucide-react";
+import { Trophy, Goal, AlertCircle, Globe, Coins, Sparkles, EyeOff } from "lucide-react";
 
 function poolStatusLabel(status: string): string {
   switch (status) {
@@ -60,7 +60,7 @@ export default function PoolPage() {
       <div className="relative flex min-h-dvh flex-col">
         <TopNav title="Pool" showBack backHref="/pools" />
         <main className="relative z-10 mx-auto flex w-full max-w-4xl flex-1 flex-col items-center justify-center px-4 py-12">
-          <p className="font-mono text-[11px] text-ink-muted/40">Loading pool...</p>
+          <p className="font-mono text-[11px] text-muted-foreground/40">Loading pool...</p>
         </main>
       </div>
     );
@@ -73,8 +73,8 @@ export default function PoolPage() {
         <main className="relative z-10 mx-auto flex w-full max-w-4xl flex-1 flex-col items-center justify-center px-4 py-12">
           <Card>
             <CardContent className="flex flex-col items-center gap-4 py-12">
-              <AlertCircle className="h-8 w-8 text-accent" />
-              <p className="font-display text-sm uppercase tracking-wider text-ink">{error || "Pool not found"}</p>
+              <AlertCircle className="h-8 w-8 text-primary" />
+              <p className="font-display text-sm uppercase tracking-wider text-foreground">{error || "Pool not found"}</p>
               <Button size="sm" onClick={() => router.push("/")}>Create a pool</Button>
             </CardContent>
           </Card>
@@ -105,15 +105,18 @@ export default function PoolPage() {
         >
           <div className="flex items-center gap-3">
             <div>
-              <h1 className="font-display text-2xl uppercase tracking-tight text-ink sm:text-3xl">
+              <h1 className="font-display text-2xl uppercase tracking-tight text-foreground sm:text-3xl">
                 {pool.name}
               </h1>
               <div className="mt-1 flex items-center gap-3">
                 <LiveIndicator label={poolStatusLabel(pool.status)} />
                 <Badge variant="elevated" size="sm">{memberCount ?? participants.length} players</Badge>
                 <Badge variant="outline" size="sm">
-                  <Globe className="h-2.5 w-2.5" />
-                  Public
+                  {pool.isPrivate ? (
+                    <><EyeOff className="h-2.5 w-2.5" /> Private</>
+                  ) : (
+                    <><Globe className="h-2.5 w-2.5" /> Public</>
+                  )}
                 </Badge>
               </div>
             </div>
@@ -151,15 +154,15 @@ export default function PoolPage() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.15, duration: 0.4 }}
           >
-            <div className="flex items-center justify-between rounded-lg border border-hairline bg-elevated/20 px-4 py-3">
+            <div className="flex items-center justify-between rounded-lg border bg-muted/20 px-4 py-3">
               <div className="flex items-center gap-3">
                 <ShareButton poolId={pool.joinCode || (params.id as string)} />
-                <span className="font-mono text-[10px] uppercase tracking-widest text-ink-muted/40">
+                <span className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground/40">
                   Share
                 </span>
               </div>
               {spotsRemaining !== undefined && (
-                <span className="font-mono text-[10px] text-ink-muted/40">
+                <span className="font-mono text-[10px] text-muted-foreground/40">
                   {spotsRemaining} spot{spotsRemaining !== 1 ? "s" : ""} remaining
                 </span>
               )}
@@ -178,7 +181,7 @@ export default function PoolPage() {
               <div className="flex w-full items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Trophy className="h-4 w-4 text-money" />
-                  <span className="font-display text-sm uppercase tracking-wider text-ink">
+                  <span className="font-display text-sm uppercase tracking-wider text-foreground">
                     Leaderboard
                   </span>
                 </div>
@@ -189,7 +192,7 @@ export default function PoolPage() {
             <CardContent className="p-0">
               {participants.length === 0 ? (
                 <div className="flex flex-col items-center gap-2 py-12">
-                  <p className="font-body text-sm text-ink-muted/40">No participants yet</p>
+                  <p className="font-body text-sm text-muted-foreground/40">No participants yet</p>
                   {poolCanJoin(pool.status) && (
                     <Button size="sm" variant="secondary" onClick={() => router.push(`/join/${pool.joinCode || params.id}`)}>
                       Join this pool

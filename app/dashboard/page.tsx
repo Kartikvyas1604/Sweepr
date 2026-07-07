@@ -44,11 +44,11 @@ function PoolCard({ pool, userAddress, isPast, index, onClick }: PoolCardProps) 
       layout
     >
       <Card
-        className="group cursor-pointer overflow-hidden transition-all duration-200 hover:border-accent/20 hover:bg-elevated/20"
+        className="group cursor-pointer overflow-hidden transition-all duration-200 hover:border-primary/20 hover:bg-muted/20"
         onClick={onClick}
       >
         <CardContent className="flex items-center gap-4 py-4">
-          <div className="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-elevated/50">
+          <div className="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-muted/50">
             <span className="text-xl">{team?.teamFlagUrl ?? "🏳️"}</span>
             {isWinner && (
               <motion.div
@@ -64,7 +64,7 @@ function PoolCard({ pool, userAddress, isPast, index, onClick }: PoolCardProps) 
 
           <div className="flex min-w-0 flex-1 flex-col gap-1.5">
             <div className="flex items-center gap-2">
-              <span className="truncate font-display text-sm font-semibold tracking-tight text-ink">
+              <span className="truncate font-display text-sm font-semibold tracking-tight text-foreground">
                 {pool.name}
               </span>
               {isPast ? (
@@ -74,7 +74,7 @@ function PoolCard({ pool, userAddress, isPast, index, onClick }: PoolCardProps) 
               )}
             </div>
 
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 font-mono text-[11px] text-ink-muted/60">
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 font-mono text-[11px] text-muted-foreground/60">
               <span className="flex items-center gap-1">
                 <Users className="h-3 w-3" />
                 {pool.memberCount}
@@ -101,11 +101,11 @@ function PoolCard({ pool, userAddress, isPast, index, onClick }: PoolCardProps) 
           )}
 
           {isPast && team && !isWinner && (
-            <div className="flex shrink-0 flex-col items-center gap-0.5 rounded-lg border border-hairline bg-elevated/30 px-3 py-2">
-              <span className="font-display text-lg leading-none text-ink-muted/60">
+            <div className="flex shrink-0 flex-col items-center gap-0.5 rounded-lg border bg-muted/30 px-3 py-2">
+              <span className="font-display text-lg leading-none text-muted-foreground/60">
                 #{team.rank}
               </span>
-              <span className="font-mono text-[10px] text-ink-muted/30">
+              <span className="font-mono text-[10px] text-muted-foreground/30">
                 {team.score} pts
               </span>
             </div>
@@ -131,7 +131,7 @@ function StatCard({
 }) {
   return (
     <motion.div
-      className="flex flex-1 flex-col gap-1.5 rounded-xl border border-hairline bg-panel/60 px-4 py-3 backdrop-blur-sm transition-all duration-200 hover:border-accent/10 hover:bg-elevated/30"
+      className="flex flex-1 flex-col gap-1.5 rounded-xl border bg-card/60 px-4 py-3 backdrop-blur-sm transition-all duration-200 hover:border-primary/10 hover:bg-muted/30"
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay, duration: 0.35, ease: "easeOut" }}
@@ -224,27 +224,27 @@ export default function DashboardPage() {
             transition={{ duration: 0.5, ease: "easeOut" }}
           >
             <div className="relative">
-              <div className="flex h-24 w-24 items-center justify-center rounded-2xl bg-gradient-to-br from-accent/20 to-money/10 ring-1 ring-accent/20">
-                <Wallet className="h-10 w-10 text-accent" />
+              <div className="flex h-24 w-24 items-center justify-center rounded-2xl bg-gradient-to-br from-primary/20 to-money/10 ring-1 ring-primary/20">
+                <Wallet className="h-10 w-10 text-primary" />
               </div>
               <motion.div
-                className="absolute -inset-4 rounded-3xl bg-accent/5"
+                className="absolute -inset-4 rounded-3xl bg-primary/5"
                 initial={{ opacity: 0, scale: 0.8 }}
                 animate={{ opacity: 1, scale: 1 }}
                 transition={{ delay: 0.2, duration: 0.6 }}
               />
             </div>
             <div className="text-center">
-              <h1 className="font-display text-2xl uppercase tracking-tight text-ink">
+              <h1 className="font-display text-2xl uppercase tracking-tight text-foreground">
                 Connect Your Wallet
               </h1>
-              <p className="mt-3 max-w-sm font-body text-sm leading-relaxed text-ink-muted">
+              <p className="mt-3 max-w-sm font-body text-sm leading-relaxed text-muted-foreground">
                 Connect your Solana wallet to track your pools, view standings,
                 and settle your sweepstakes.
               </p>
             </div>
             <WalletButton className="scale-110" />
-            <div className="flex gap-6 text-center font-mono text-[10px] uppercase tracking-[0.2em] text-ink-muted/30">
+            <div className="flex gap-6 text-center font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground/30">
               <span>Phantom</span>
               <span>Backpack</span>
             </div>
@@ -263,7 +263,7 @@ export default function DashboardPage() {
       />
 
       <div className="pointer-events-none fixed inset-0 top-0 z-0">
-        <div className="absolute left-1/2 top-0 h-[600px] w-[600px] -translate-x-1/2 rounded-full bg-accent/3 blur-[120px]" />
+        <div className="absolute left-1/2 top-0 h-[600px] w-[600px] -translate-x-1/2 rounded-full bg-primary/3 blur-[120px]" />
         <div className="absolute right-0 top-1/4 h-[400px] w-[400px] rounded-full bg-money/2 blur-[100px]" />
       </div>
 
@@ -275,10 +275,10 @@ export default function DashboardPage() {
         >
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="font-display text-xl uppercase tracking-tight text-ink">
+              <h1 className="font-display text-xl uppercase tracking-tight text-foreground">
                 Your Pools
               </h1>
-              <p className="mt-0.5 font-body text-sm text-ink-muted/60">
+              <p className="mt-0.5 font-body text-sm text-muted-foreground/60">
                 {stats.total} pool{stats.total !== 1 ? "s" : ""} · {stats.wins} win{stats.wins !== 1 ? "s" : ""}
               </p>
             </div>
@@ -312,7 +312,7 @@ export default function DashboardPage() {
             animate={{ opacity: 1 }}
             className="flex flex-1 flex-col items-center justify-center gap-4 py-16"
           >
-            <p className="font-mono text-[11px] text-ink-muted/40">Loading your pools...</p>
+            <p className="font-mono text-[11px] text-muted-foreground/40">Loading your pools...</p>
           </motion.div>
         ) : pools.length === 0 ? (
           <motion.div
@@ -321,14 +321,14 @@ export default function DashboardPage() {
             animate={{ opacity: 1 }}
             transition={{ delay: 0.2 }}
           >
-            <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-gradient-to-br from-accent/10 to-money/5 ring-1 ring-accent/10">
-              <Sparkles className="h-8 w-8 text-accent/60" />
+            <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-gradient-to-br from-primary/10 to-money/5 ring-1 ring-primary/10">
+              <Sparkles className="h-8 w-8 text-primary/60" />
             </div>
             <div className="text-center">
-              <h2 className="font-display text-lg uppercase tracking-tight text-ink">
+              <h2 className="font-display text-lg uppercase tracking-tight text-foreground">
                 No pools yet
               </h2>
-              <p className="mt-2 max-w-xs font-body text-sm leading-relaxed text-ink-muted/60">
+              <p className="mt-2 max-w-xs font-body text-sm leading-relaxed text-muted-foreground/60">
                 Start a sweepstakes with friends or join one with a shareable link.
               </p>
             </div>
@@ -350,32 +350,32 @@ export default function DashboardPage() {
               animate={{ opacity: 1 }}
               transition={{ delay: 0.15 }}
             >
-              <div className="flex gap-1 rounded-lg border border-hairline bg-elevated/20 p-0.5">
+              <div className="flex gap-1 rounded-lg border bg-muted/20 p-0.5">
                 {(["active", "past"] as const).map((t) => (
                   <button
                     key={t}
                     onClick={() => setTab(t)}
                     className={`rounded-md px-3 py-1.5 font-mono text-[11px] uppercase tracking-wider transition-all duration-200 ${
                       tab === t
-                        ? "bg-accent text-base shadow-sm"
-                        : "text-ink-muted/60 hover:text-ink"
+                        ? "bg-primary text-base shadow-sm"
+                        : "text-muted-foreground/60 hover:text-foreground"
                     }`}
                   >
                     {t}
-                    <span className="ml-1.5 rounded-full bg-elevated/50 px-1.5 py-0.5 text-[10px] tabular-nums">
+                    <span className="ml-1.5 rounded-full bg-muted/50 px-1.5 py-0.5 text-[10px] tabular-nums">
                       {t === "active" ? current.length : past.length}
                     </span>
                   </button>
                 ))}
               </div>
               <div className="relative ml-auto">
-                <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ink-muted/40" />
+                <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground/40" />
                 <input
                   type="text"
                   placeholder="Search pools..."
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  className="w-40 rounded-lg border border-hairline bg-elevated/20 py-1.5 pl-8 pr-3 font-mono text-[11px] text-ink placeholder-ink-muted/30 outline-none transition-all focus:border-accent/30 focus:bg-elevated/40 sm:w-52"
+                  className="w-40 rounded-lg border bg-muted/20 py-1.5 pl-8 pr-3 font-mono text-[11px] text-foreground placeholder-muted-foreground/30 outline-none transition-all focus:border-primary/30 focus:bg-muted/40 sm:w-52"
                 />
               </div>
             </motion.div>
@@ -389,10 +389,10 @@ export default function DashboardPage() {
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
                 >
-                  <div className="flex h-14 w-14 items-center justify-center rounded-full bg-elevated/30">
-                    <Filter className="h-6 w-6 text-ink-muted/30" />
+                  <div className="flex h-14 w-14 items-center justify-center rounded-full bg-muted/30">
+                    <Filter className="h-6 w-6 text-muted-foreground/30" />
                   </div>
-                  <p className="font-body text-sm text-ink-muted/40">
+                  <p className="font-body text-sm text-muted-foreground/40">
                     No {tab} pools match your search
                   </p>
                   <Button variant="ghost" size="sm" onClick={() => setSearch("")}>

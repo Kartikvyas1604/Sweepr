@@ -64,7 +64,7 @@ export function WalletSelector({ open, onSelect, onClose }: WalletSelectorProps)
         >
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
           <motion.div
-            className="relative w-full max-w-sm rounded-2xl border border-hairline bg-panel p-6 shadow-2xl"
+            className="relative w-full max-w-sm rounded-2xl border bg-card p-6 shadow-2xl"
             initial={{ opacity: 0, scale: 0.95, y: 10 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 10 }}
@@ -72,18 +72,18 @@ export function WalletSelector({ open, onSelect, onClose }: WalletSelectorProps)
           >
             <div className="mb-5 flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <Wallet className="h-4 w-4 text-accent" />
-                <h2 className="font-display text-sm uppercase tracking-wider text-ink">
+                <Wallet className="h-4 w-4 text-primary" />
+                <h2 className="font-display text-sm uppercase tracking-wider text-foreground">
                   Connect Wallet
                 </h2>
               </div>
-              <button onClick={onClose} className="rounded-md p-1 text-ink-muted/40 hover:text-ink transition-colors">
+              <button onClick={onClose} className="rounded-md p-1 text-muted-foreground/40 hover:text-foreground transition-colors">
                 <X className="h-4 w-4" />
               </button>
             </div>
 
             {wallets.length === 0 ? (
-              <p className="py-8 text-center font-body text-sm text-ink-muted/40">
+              <p className="py-8 text-center font-body text-sm text-muted-foreground/40">
                 No Solana wallets detected.
                 <br />
                 Please install Phantom or Backpack.
@@ -94,16 +94,16 @@ export function WalletSelector({ open, onSelect, onClose }: WalletSelectorProps)
                   <button
                     key={wallet.id}
                     onClick={() => onSelect(wallet)}
-                    className="flex items-center gap-3 rounded-xl border border-hairline bg-elevated/20 px-4 py-3 text-left transition-all duration-200 hover:border-accent/20 hover:bg-elevated/40"
+                    className="flex items-center gap-3 rounded-xl border bg-muted/20 px-4 py-3 text-left transition-all duration-200 hover:border-primary/20 hover:bg-muted/40"
                   >
-                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-elevated/50 text-lg">
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-muted/50 text-lg">
                       {wallet.icon}
                     </span>
                     <div className="flex flex-col">
-                      <span className="font-display text-sm font-medium tracking-tight text-ink">
+                      <span className="font-display text-sm font-medium tracking-tight text-foreground">
                         {wallet.name}
                       </span>
-                      <span className="font-mono text-[10px] uppercase tracking-wider text-ink-muted/40">
+                      <span className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground/40">
                         Solana Wallet
                       </span>
                     </div>

@@ -164,17 +164,12 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     let wallet = address;
 
     if (!wallet || !isValidSolanaAddress(wallet)) {
-      wallet = null;
-      const pk = provider.publicKey;
-      if (pk?.toBase58) {
-        const addr = pk.toBase58();
-        if (typeof addr === "string" && isValidSolanaAddress(addr)) wallet = addr;
-      }
+      wallet = tryExtractWallet(provider, { publicKey: provider.publicKey });
     }
 
     if (!wallet || !isValidSolanaAddress(wallet)) {
       const connectResult = await provider.connect();
-      wallet = extractWalletAddress(connectResult);
+      wallet = tryExtractWallet(provider, connectResult);
     }
     if (!wallet || !isValidSolanaAddress(wallet)) {
       throw new Error("Invalid wallet address — expected a valid Solana pubkey");
@@ -205,6 +200,16 @@ function extractWalletAddress(connectResult: any): string | null {
   return null;
 }
 
+  function tryExtractWallet(provider: any, connectResult: any): string | null {
+    let wallet = extractWalletAddress(connectResult);
+    if (!wallet) {
+      // Some wallets (Solflare, etc.) set provider.publicKey after connect()
+      // but don't return it in a standard { publicKey } format.
+      wallet = extractWalletAddress({ publicKey: provider?.publicKey });
+    }
+    return wallet;
+  }
+
   const connect = useCallback(async () => {
     if (connectingRef.current) return;
     connectingRef.current = true;
@@ -212,7 +217,7 @@ function extractWalletAddress(connectResult: any): string | null {
     try {
       const provider = await getWalletProvider(address);
       const connectResult = await provider.connect();
-      const wallet = extractWalletAddress(connectResult);
+      const wallet = tryExtractWallet(provider, connectResult);
       if (!wallet || !isValidSolanaAddress(wallet)) {
         throw new Error("Could not get valid Solana wallet address from provider");
       }

@@ -56,6 +56,7 @@ export async function GET(
         maxMembers: pool.max_members,
         createdAt: pool.created_at,
         settledAt: pool.settled_at,
+        isPrivate: pool.is_private,
       },
       leaderboard,
       memberCount: memberCount ?? 0,

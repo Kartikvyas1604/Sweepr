@@ -1,51 +1,131 @@
 @import "tailwindcss";
 
 @theme inline {
-  --color-base: #0B1410;
-  --color-panel: #13241B;
-  --color-elevated: #1A3026;
-  --color-ink: #F4F1E8;
-  --color-ink-muted: #8FA396;
-  --color-accent: #FF5A1F;
-  --color-live: #FF5A1F;
-  --color-money: #F2C94C;
-  --color-success: #34D399;
-  --color-hairline: rgba(143, 163, 150, 0.15);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-success: var(--success);
+  --color-money: var(--accent);
+  --radius: var(--radius);
+
+  --color-base: var(--background);
+  --color-panel: var(--card);
+  --color-elevated: var(--muted);
+  --color-ink: var(--foreground);
+  --color-ink-muted: var(--muted-foreground);
+  --color-brand: var(--primary);
+  --color-live: var(--primary);
+  --color-hairline: var(--border);
 
   --font-display: "Bricolage Grotesque", sans-serif;
   --font-body: "Inter", sans-serif;
   --font-mono: "JetBrains Mono", monospace;
 }
 
+:root {
+  --bg: oklch(0.14 0.01 75);
+  --fg: oklch(0.97 0.01 75);
+  --card: oklch(0.19 0.015 75);
+  --card-fg: oklch(0.97 0.01 75);
+  --accent-bg: oklch(0.21 0.015 75);
+  --primary: oklch(0.68 0.10 40);
+  --primary-fg: oklch(0.98 0 0);
+  --muted-fg: oklch(0.67 0.01 75);
+  --accent: oklch(0.78 0.12 75);
+  --success: oklch(0.62 0.15 140);
+  --border: oklch(0.27 0.015 75);
+  --ring: oklch(0.68 0.10 40);
+
+  --background: oklch(0.14 0.01 75);
+  --foreground: oklch(0.97 0.01 75);
+  --card: oklch(0.19 0.015 75);
+  --card-foreground: oklch(0.97 0.01 75);
+  --popover: oklch(0.21 0.015 75);
+  --popover-foreground: oklch(0.97 0.01 75);
+  --primary: oklch(0.68 0.10 40);
+  --primary-foreground: oklch(0.98 0 0);
+  --secondary: oklch(0.23 0.015 75);
+  --secondary-foreground: oklch(0.97 0.01 75);
+  --muted: oklch(0.21 0.015 75);
+  --muted-foreground: oklch(0.67 0.01 75);
+  --accent: oklch(0.78 0.12 75);
+  --accent-foreground: oklch(0.97 0.01 75);
+  --destructive: oklch(0.65 0.20 40);
+  --destructive-foreground: oklch(0.98 0 0);
+  --border: oklch(0.27 0.015 75);
+  --input: oklch(0.19 0.015 75);
+  --ring: oklch(0.68 0.10 40);
+  --radius: 0.5rem;
+}
+
+.light {
+  --bg: oklch(0.98 0.005 75);
+  --fg: oklch(0.20 0.01 30);
+  --card: oklch(1 0 0);
+  --card-fg: oklch(0.20 0.01 30);
+  --accent-bg: oklch(0.93 0.01 71);
+  --primary: oklch(0.48 0.12 30);
+  --primary-fg: oklch(0.98 0 0);
+  --muted-fg: oklch(0.50 0.01 30);
+  --accent: oklch(0.65 0.14 75);
+  --success: oklch(0.55 0.18 140);
+  --border: oklch(0.90 0.005 75);
+  --ring: oklch(0.48 0.12 30);
+
+  --background: oklch(0.98 0.005 75);
+  --foreground: oklch(0.20 0.01 30);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.20 0.01 30);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.20 0.01 30);
+  --primary: oklch(0.48 0.12 30);
+  --primary-foreground: oklch(0.98 0 0);
+  --secondary: oklch(0.93 0.005 75);
+  --secondary-foreground: oklch(0.20 0.01 30);
+  --muted: oklch(0.95 0.005 75);
+  --muted-foreground: oklch(0.50 0.01 30);
+  --accent: oklch(0.65 0.14 75);
+  --accent-foreground: oklch(0.20 0.01 30);
+  --destructive: oklch(0.50 0.20 30);
+  --destructive-foreground: oklch(0.98 0 0);
+  --border: oklch(0.90 0.005 75);
+  --input: oklch(0.96 0.005 75);
+  --ring: oklch(0.48 0.12 30);
+  --radius: 0.5rem;
+}
+
 @layer base {
   * {
-    border-color: var(--color-hairline);
+    border-color: var(--border);
   }
 
   body {
-    background-color: var(--color-base);
-    background-image:
-      radial-gradient(
-        ellipse 80% 60% at 50% -10%,
-        rgba(143, 163, 150, 0.04) 0%,
-        transparent 70%
-      ),
-      repeating-linear-gradient(
-        0deg,
-        transparent,
-        transparent 40px,
-        rgba(143, 163, 150, 0.015) 40px,
-        rgba(143, 163, 150, 0.015) 41px
-      );
-    color: var(--color-ink);
+    background-color: var(--bg);
+    color: var(--fg);
     font-family: var(--font-body);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
 
   ::selection {
-    background-color: var(--color-accent);
-    color: var(--color-base);
+    background-color: var(--primary);
+    color: var(--primary-fg);
   }
 
   .tabular-nums {

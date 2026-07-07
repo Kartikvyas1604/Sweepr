@@ -46,6 +46,19 @@ export default function Home() {
   const [passphrase, setPassphrase] = useState("");
   const [error, setError] = useState<string | null>(null);
 
+  function generatePassphrase(): string {
+    const words = [
+      "thunder", "crystal", "falcon", "shadow", "blaze",
+      "ocean", "summit", "ember", "winter", "storm",
+      "ridge", "valley", "horizon", "aurora", "phantom",
+      "echo", "drift", "flux", "grove", "peak",
+    ];
+    const a = words[Math.floor(Math.random() * words.length)];
+    const b = words[Math.floor(Math.random() * words.length)];
+    const n = Math.floor(Math.random() * 99) + 10;
+    return `${a}-${b}-${n}`;
+  }
+
   async function handleCreate() {
     if (!connected) return;
     const fee = entryFee === "" ? 0 : parseFloat(entryFee);
@@ -54,7 +67,11 @@ export default function Home() {
     setError(null);
     try {
       await ensureAuth();
-      const result = await api.pools.create(poolName, fee);
+      const finalPassphrase = isPrivate ? (passphrase || generatePassphrase()) : undefined;
+      const result = await api.pools.create(poolName, fee, undefined, isPrivate, finalPassphrase);
+      if (finalPassphrase && !passphrase) {
+        alert(`Your pool passphrase is: ${finalPassphrase}\n\nShare it with your friends so they can join.`);
+      }
       router.push(`/pool/${result.pool.joinCode}`);
     } catch (e) {
       if (e instanceof ApiClientError) {
@@ -70,12 +87,12 @@ export default function Home() {
       <TopNav title="Sweepr" right={<WalletButton />} />
 
       {/* Top ticker bar */}
-      <div className="relative z-10 flex h-8 items-center overflow-hidden border-b border-hairline bg-panel/60 px-4">
-        <div className="flex w-full items-center justify-between font-mono text-[10px] uppercase tracking-[0.2em] text-ink-muted/60">
+      <div className="relative z-10 flex h-8 items-center overflow-hidden border-b border bg-muted/60 px-4">
+        <div className="flex w-full items-center justify-between font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground/60">
           <span className="flex items-center gap-2">
             <span className="relative flex h-1.5 w-1.5">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-accent opacity-60" />
-              <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-accent" />
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-60" />
+              <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-primary" />
             </span>
             LIVE ODDS
           </span>
@@ -98,17 +115,17 @@ export default function Home() {
             }}
           >
             <motion.div variants={STAGGER} custom={0}>
-              <div className="inline-flex items-center gap-3 rounded-full border border-hairline bg-elevated/50 px-4 py-1.5 font-mono text-[10px] uppercase tracking-[0.25em] text-ink-muted">
-                <Sparkles className="h-3 w-3 text-accent" />
+              <div className="inline-flex items-center gap-3 rounded-full border bg-muted/50 px-4 py-1.5 font-mono text-[10px] uppercase tracking-[0.25em] text-muted-foreground">
+                <Sparkles className="h-3 w-3 text-primary" />
                 on-chain • trustless • instant
               </div>
             </motion.div>
 
             <motion.div variants={STAGGER} custom={1} className="flex flex-col items-center gap-2">
-              <h1 className="font-display text-7xl leading-none tracking-tight text-ink sm:text-8xl md:text-9xl">
+              <h1 className="font-display text-7xl leading-none tracking-tight text-foreground sm:text-8xl md:text-9xl">
                 SWEEPR
               </h1>
-              <p className="max-w-lg font-body text-base leading-relaxed text-ink-muted sm:text-lg">
+              <p className="max-w-lg font-body text-base leading-relaxed text-muted-foreground sm:text-lg">
                 Office pool, automated. Create a sweepstakes, share the link, and
                 the smart contract settles the winner — no spreadsheets, no
                 &ldquo;who has the cash?&rdquo; group chats.
@@ -120,13 +137,13 @@ export default function Home() {
                 {[...Array(4)].map((_, i) => (
                   <div
                     key={i}
-                    className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-elevated bg-panel text-[10px] font-bold text-ink-muted"
+                    className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-muted bg-card text-[10px] font-bold text-muted-foreground"
                   >
                     {["🇧🇷", "🇦🇷", "🇫🇷", "🏴󠁧󠁢󠁥󠁮󠁧󠁿"][i]}
                   </div>
                 ))}
               </div>
-              <span className="font-mono text-[11px] text-ink-muted">
+              <span className="font-mono text-[11px] text-muted-foreground">
                 Join 1,234 active pools
               </span>
             </motion.div>
@@ -141,7 +158,7 @@ export default function Home() {
           >
             <Card variant="elevated">
               <CardHeader>
-                <div className="flex items-center gap-2 font-display text-sm uppercase tracking-wider text-ink">
+                <div className="flex items-center gap-2 font-display text-sm uppercase tracking-wider text-foreground">
                   <Trophy className="h-4 w-4 text-money" />
                   Start Your Pool
                 </div>
@@ -172,8 +189,8 @@ export default function Home() {
                     onClick={() => { setIsPrivate(false); setPassphrase(""); }}
                     className={`flex flex-1 items-center justify-center gap-2 rounded-md border px-3 py-2.5 font-mono text-[11px] uppercase tracking-wider transition-all ${
                       !isPrivate
-                        ? "border-accent/40 bg-accent/10 text-accent"
-                        : "border-hairline bg-elevated/30 text-ink-muted/50 hover:border-ink-muted/30"
+                        ? "border-primary/40 bg-primary/10 text-primary"
+                        : "border bg-muted/30 text-muted-foreground/50 hover:border-foreground/30"
                     }`}
                   >
                     <Globe className="h-3.5 w-3.5" />
@@ -184,8 +201,8 @@ export default function Home() {
                     onClick={() => setIsPrivate(true)}
                     className={`flex flex-1 items-center justify-center gap-2 rounded-md border px-3 py-2.5 font-mono text-[11px] uppercase tracking-wider transition-all ${
                       isPrivate
-                        ? "border-accent/40 bg-accent/10 text-accent"
-                        : "border-hairline bg-elevated/30 text-ink-muted/50 hover:border-ink-muted/30"
+                        ? "border-primary/40 bg-primary/10 text-primary"
+                        : "border bg-muted/30 text-muted-foreground/50 hover:border-foreground/30"
                     }`}
                   >
                     <EyeOff className="h-3.5 w-3.5" />
@@ -210,9 +227,9 @@ export default function Home() {
                 )}
 
                 {error && (
-                  <div className="flex items-center gap-2 rounded-md bg-accent/10 px-3 py-2">
-                    <AlertCircle className="h-3.5 w-3.5 shrink-0 text-accent" />
-                    <p className="font-mono text-[11px] text-accent">{error}</p>
+                  <div className="flex items-center gap-2 rounded-md bg-destructive/10 px-3 py-2">
+                    <AlertCircle className="h-3.5 w-3.5 shrink-0 text-destructive" />
+                    <p className="font-mono text-[11px] text-destructive">{error}</p>
                   </div>
                 )}
 
@@ -225,7 +242,7 @@ export default function Home() {
                   {connected ? "Create Pool" : "Connect Wallet to Create"}
                   <ArrowRight className="h-4 w-4" />
                 </Button>
-                <p className="text-center font-mono text-[10px] uppercase tracking-widest text-ink-muted/40">
+                <p className="text-center font-mono text-[10px] uppercase tracking-widest text-muted-foreground/40">
                   2.5% fee · escrow-secured · instant settlement
                 </p>
               </CardContent>
@@ -255,19 +272,19 @@ export default function Home() {
               >
                 <Card className="h-full text-center">
                   <CardContent className="flex flex-col items-center gap-3 py-6">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-elevated/50">
-                      <step.icon className="h-5 w-5 text-accent" />
+                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted/50">
+                      <step.icon className="h-5 w-5 text-primary" />
                     </div>
                     <div>
-                      <p className="font-display text-sm uppercase tracking-wider text-ink">
+                      <p className="font-display text-sm uppercase tracking-wider text-foreground">
                         {step.label}
                       </p>
-                      <p className="mt-1 font-body text-xs leading-relaxed text-ink-muted">
+                      <p className="mt-1 font-body text-xs leading-relaxed text-muted-foreground">
                         {step.desc}
                       </p>
                     </div>
                     {i < STEPS.length - 1 && (
-                      <ArrowRight className="hidden h-4 w-4 text-ink-muted/30 sm:block" />
+                      <ArrowRight className="hidden h-4 w-4 text-muted-foreground/30 sm:block" />
                     )}
                   </CardContent>
                 </Card>
@@ -278,15 +295,15 @@ export default function Home() {
       </main>
 
       {/* Footer */}
-      <footer className="relative z-10 border-t border-hairline px-4 py-6">
+      <footer className="relative z-10 border-t border px-4 py-6">
         <div className="mx-auto flex max-w-4xl flex-col items-center justify-between gap-4 sm:flex-row">
           <div className="flex items-center gap-3">
             <Lock className="h-3.5 w-3.5 text-money" />
-            <span className="font-mono text-[10px] uppercase tracking-widest text-ink-muted/40">
+            <span className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground/40">
               Powered by Solana · Audited
             </span>
           </div>
-          <span className="font-mono text-[10px] text-ink-muted/30">
+          <span className="font-mono text-[10px] text-muted-foreground/30">
             SWEEPR © {new Date().getFullYear()}
           </span>
         </div>

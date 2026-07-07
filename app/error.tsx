@@ -24,7 +24,7 @@ export default function Error({ reset }: ErrorProps) {
           <AlertTriangle className="h-16 w-16 text-accent/60" />
         </motion.div>
         <div>
-          <p className="font-display text-xl uppercase tracking-wider text-ink">
+          <p className="font-display text-xl uppercase tracking-wider text-foreground">
             Something went wrong
           </p>
           <p className="mt-2 font-body text-sm text-ink-muted">

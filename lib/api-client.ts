@@ -80,10 +80,10 @@ export const api = {
       const params = wallet ? `?wallet=${encodeURIComponent(wallet)}` : "";
       return request<{ pools: any[] }>(`/api/pools${params}`);
     },
-    create: (name: string, entryFeeUsdc: number, maxMembers?: number) =>
+    create: (name: string, entryFeeUsdc: number, maxMembers?: number, isPrivate?: boolean, passphrase?: string) =>
       request<{ pool: any; joinUrl: string }>("/api/pools", {
         method: "POST",
-        body: JSON.stringify({ name, entryFeeUsdc, maxMembers }),
+        body: JSON.stringify({ name, entryFeeUsdc, maxMembers, isPrivate, passphrase }),
       }),
     get: (joinCode: string) =>
       request<{ pool: any; leaderboard: any[]; memberCount: number; spotsRemaining: number; joinUrl: string }>(
@@ -94,12 +94,12 @@ export const api = {
         `/api/pools/${joinCode}/assign-team`,
         { method: "POST" },
       ),
-    join: (joinCode: string, displayName: string, stakeTxSignature?: string, tempToken?: string) =>
+    join: (joinCode: string, displayName: string, stakeTxSignature?: string, tempToken?: string, passphrase?: string) =>
       request<{ member: any; assignedTeam: any; leaderboard: any[] }>(
         `/api/pools/${joinCode}/join`,
         {
           method: "POST",
-          body: JSON.stringify({ displayName, stakeTxSignature, tempToken }),
+          body: JSON.stringify({ displayName, stakeTxSignature, tempToken, passphrase }),
         },
       ),
     leaderboard: (joinCode: string) =>

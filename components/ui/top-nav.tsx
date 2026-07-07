@@ -27,7 +27,7 @@ function TopNav({
   return (
     <nav
       className={cn(
-        "relative z-10 flex h-12 items-center border-b border-hairline bg-base/80 backdrop-blur-sm px-4",
+        "relative z-10 flex h-12 items-center border-b border bg-background/80 backdrop-blur-sm px-4",
         className,
       )}
     >
@@ -36,7 +36,7 @@ function TopNav({
           {showBack ? (
             <button
               onClick={() => (backHref ? router.push(backHref) : router.back())}
-              className="flex items-center gap-1.5 font-mono text-[11px] uppercase tracking-wider text-ink-muted transition-colors hover:text-ink"
+              className="flex items-center gap-1.5 font-mono text-[11px] uppercase tracking-wider text-muted-foreground transition-colors hover:text-foreground"
             >
               <ArrowLeft className="h-3.5 w-3.5" />
               Back
@@ -46,20 +46,16 @@ function TopNav({
               onClick={onLogoClick}
               className="flex items-center gap-2 transition-opacity hover:opacity-80"
             >
-              <span className="font-display text-sm uppercase tracking-widest text-ink">
+              <span className="font-display text-sm uppercase tracking-widest text-foreground">
                 {title}
               </span>
             </button>
           ) : (
-            <span className="font-display text-sm uppercase tracking-widest text-ink">
+            <span className="font-display text-sm uppercase tracking-widest text-foreground">
               {title}
             </span>
           )}
         </div>
-
-        <span className="font-display text-sm uppercase tracking-widest text-ink">
-          {title}
-        </span>
 
         <div className="flex w-24 items-center justify-end gap-3">
           {right || <WalletButton />}

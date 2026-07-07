@@ -20,12 +20,12 @@ function Badge({
           md: "h-6 px-2.5 text-[11px]",
         }[size],
         {
-          default: "bg-elevated/50 text-ink-muted border border-hairline",
-          live: "bg-accent/15 text-accent border border-accent/20",
+          default: "bg-muted/50 text-muted-foreground border",
+          live: "bg-primary/15 text-primary border border-primary/20",
           money: "bg-money/15 text-money border border-money/20",
           success: "bg-success/15 text-success border border-success/20",
-          elevated: "bg-elevated text-ink-muted border border-hairline",
-          outline: "border border-hairline text-ink-muted",
+          elevated: "bg-muted text-muted-foreground border",
+          outline: "border text-muted-foreground",
         }[variant],
         className,
       )}

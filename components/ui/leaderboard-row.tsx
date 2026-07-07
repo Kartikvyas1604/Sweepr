@@ -48,9 +48,9 @@ function LeaderboardRow({
         backgroundColor: { duration: 0.3 },
       }}
       className={cn(
-        "group flex items-center gap-3 border-b border-hairline px-4 py-3 transition-colors sm:px-6",
-        isCurrentUser && "bg-accent/5",
-        highlight && "bg-accent/5",
+        "group flex items-center gap-3 border-b border px-4 py-3 transition-colors sm:px-6",
+        isCurrentUser && "bg-primary/5",
+        highlight && "bg-primary/5",
       )}
     >
       {/* Rank */}
@@ -60,14 +60,14 @@ function LeaderboardRow({
             className={cn(
               "font-display text-lg",
               rank === 1 && "text-money",
-              rank === 2 && "text-ink-muted",
-              rank === 3 && "text-accent/70",
+              rank === 2 && "text-muted-foreground",
+              rank === 3 && "text-primary/70",
             )}
           >
             {rank === 1 ? "🥇" : rank === 2 ? "🥈" : "🥉"}
           </span>
         ) : (
-          <span className="font-mono text-xs text-ink-muted/40">
+          <span className="font-mono text-xs text-muted-foreground/40">
             {rank}
           </span>
         )}
@@ -85,20 +85,20 @@ function LeaderboardRow({
             className={cn(
               "truncate font-body text-sm font-medium",
               isCurrentUser
-                ? "text-accent"
+                ? "text-primary"
                 : rank <= 3
-                  ? "text-ink"
-                  : "text-ink-muted",
+                  ? "text-foreground"
+                  : "text-muted-foreground",
             )}
           >
             {participant.name}
             {isCurrentUser && (
-              <span className="ml-2 font-mono text-[9px] uppercase tracking-widest text-accent/60">
+              <span className="ml-2 font-mono text-[9px] uppercase tracking-widest text-primary/60">
                 (you)
               </span>
             )}
           </p>
-          <p className="truncate font-mono text-[10px] text-ink-muted/30">
+          <p className="truncate font-mono text-[10px] text-muted-foreground/30">
             {participant.team.name}
           </p>
         </div>
@@ -131,7 +131,7 @@ function LeaderboardRow({
           ) : (
             <motion.span
               key="score"
-              className="font-display text-2xl tabular-nums tracking-tight text-ink"
+              className="font-display text-2xl tabular-nums tracking-tight text-foreground"
             >
               {participant.score}
             </motion.span>
@@ -144,15 +144,15 @@ function LeaderboardRow({
 
 function LeaderboardHeader() {
   return (
-    <div className="flex items-center gap-3 border-b border-hairline px-4 py-2 sm:px-6">
+    <div className="flex items-center gap-3 border-b border px-4 py-2 sm:px-6">
       <div className="w-8" />
       <div className="flex-1">
-        <span className="font-mono text-[9px] uppercase tracking-[0.2em] text-ink-muted/40">
+        <span className="font-mono text-[9px] uppercase tracking-[0.2em] text-muted-foreground/40">
           Participant
         </span>
       </div>
       <div className="flex items-center gap-1">
-        <span className="font-mono text-[9px] uppercase tracking-[0.2em] text-ink-muted/40">
+        <span className="font-mono text-[9px] uppercase tracking-[0.2em] text-muted-foreground/40">
           Pts
         </span>
       </div>

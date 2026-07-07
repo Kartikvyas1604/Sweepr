@@ -23,7 +23,7 @@ export default function NotFound() {
           404
         </motion.span>
         <div>
-          <p className="font-display text-xl uppercase tracking-wider text-ink">
+          <p className="font-display text-xl uppercase tracking-wider text-foreground">
             No pitch found
           </p>
           <p className="mt-2 font-body text-sm text-ink-muted">
