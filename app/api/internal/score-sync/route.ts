@@ -7,11 +7,11 @@ import { callUpdateScore } from "@/lib/solana";
 import { computeLeaderboard } from "@/lib/pools";
 import { env } from "@/lib/env";
 import { logger } from "@/lib/logger";
+import { verifySecret } from "@/lib/security";
 
 export async function POST(request: Request) {
   try {
-    const authKey = request.headers.get("x-inngest-key");
-    if (authKey !== env.INNGEST_EVENT_KEY) {
+    if (!verifySecret(request.headers.get("x-inngest-key") ?? "", env.INNGEST_EVENT_KEY)) {
       throw new ApiError(401, "UNAUTHORIZED", "Invalid Inngest key");
     }
 
@@ -37,6 +37,7 @@ export async function POST(request: Request) {
     let totalNewGoals = 0;
 
     for (const pool of activePools) {
+      logger.info("Processing pool score sync", { poolId: pool.id });
       const { data: members } = await supabaseAdmin
         .from("pool_members")
         .select("id, wallet, team_id, display_name, team_name, team_flag_url")

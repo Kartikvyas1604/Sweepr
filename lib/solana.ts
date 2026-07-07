@@ -23,6 +23,7 @@ import crypto from "crypto";
 import { env } from "./env";
 import { logger } from "./logger";
 import { ApiError } from "./errors";
+import sweeprIdl from "@/anchor/idl/sweepr.json";
 
 let connection: Connection | null = null;
 let oracleKeypair: Keypair | null = null;
@@ -84,8 +85,7 @@ export function getProgram(): Program {
     const provider = new AnchorProvider(conn, wallet, {
       commitment: "confirmed",
     });
-    const idl = require("@/anchor/idl/sweepr.json") as Idl;
-    program = new Program(idl, provider);
+    program = new Program(sweeprIdl as Idl, provider);
   }
   return program;
 }
@@ -419,8 +419,7 @@ export function getReadonlyProgram(programId: PublicKey, connection?: Connection
   const provider = new AnchorProvider(conn, throwawayWallet, {
     commitment: "confirmed",
   });
-  const idl = require("@/anchor/idl/sweepr.json") as Idl;
-  return new Program(idl, provider);
+  return new Program(sweeprIdl as Idl, provider);
 }
 
 export function teamIdToBytes(teamId: string): number[] {
@@ -536,12 +535,10 @@ export async function verifyJoinPoolTx(
         const ixAccounts = ix.accountKeyIndexes.map(
           (idx: number) => accountKeys[idx].toString(),
         );
-        const data = Buffer.from(ix.data); // base58 decoded bytes
-        // Solana SystemProgram.transfer instruction: 4-byte discriminator (0x02)... then 8-byte LE amount
-        // Simplification: check if member is sender and poolPDA is receiver
-        const fromIdx = ixAccounts[0];
-        const toIdx = ixAccounts[1];
-        if (fromIdx === memberPubkey.toBase58() && toIdx === expectedPoolPda.toBase58()) {
+        // Check if member is sender and poolPDA is receiver
+        const fromAddr = ixAccounts[0];
+        const toAddr = ixAccounts[1];
+        if (fromAddr === memberPubkey.toBase58() && toAddr === expectedPoolPda.toBase58()) {
           solTransferVerified = true;
         }
       }

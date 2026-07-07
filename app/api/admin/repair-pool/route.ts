@@ -1,16 +1,15 @@
 import { handleRouteError, ApiError } from "@/lib/errors";
 import { supabaseAdmin } from "@/lib/supabase";
-import { callInitializePool, derivePoolPDA } from "@/lib/solana";
-import { getConnection } from "@/lib/solana";
+import { callInitializePool, derivePoolPDA, getConnection } from "@/lib/solana";
 import { env } from "@/lib/env";
 import { logger } from "@/lib/logger";
+import { verifySecret } from "@/lib/security";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
   try {
-    const auth = request.headers.get("authorization")?.replace("Bearer ", "");
-    if (auth !== env.INNGEST_SIGNING_KEY) {
+    if (!verifySecret(request.headers.get("authorization")?.replace("Bearer ", "") ?? "", env.INNGEST_SIGNING_KEY)) {
       throw new ApiError(401, "UNAUTHORIZED", "Invalid admin key");
     }
 

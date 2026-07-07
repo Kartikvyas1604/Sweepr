@@ -9,6 +9,8 @@ import { LAMPORTS_PER_SOL } from "@solana/web3.js";
 import { getAllTeams } from "@/lib/txline";
 import { redis, publishPoolUpdate } from "@/lib/redis";
 import { logger } from "@/lib/logger";
+import { sanitizeDisplayName } from "@/lib/utils";
+import { verifyPassphrase } from "@/lib/security";
 
 export const dynamic = "force-dynamic";
 
@@ -37,7 +39,8 @@ export async function POST(
       return handleRouteError(parsed.error);
     }
 
-    const { displayName, stakeTxSignature, tempToken } = parsed.data;
+    const displayName = sanitizeDisplayName(parsed.data.displayName);
+    const { stakeTxSignature, tempToken } = parsed.data;
 
     const { data: pool, error: poolError } = await supabaseAdmin
       .from("pools")
@@ -53,11 +56,8 @@ export async function POST(
       throw new ApiError(409, "POOL_SETTLED", "This pool has already been settled or failed");
     }
 
-    // Validate passphrase for private pools
-    if (pool.is_private && pool.passphrase) {
-      if (!parsed.data.passphrase || parsed.data.passphrase !== pool.passphrase) {
-        throw new ApiError(403, "INVALID_PASSPHRASE", "Incorrect pool passphrase");
-      }
+    if (pool.is_private && !verifyPassphrase(parsed.data.passphrase, pool.passphrase)) {
+      throw new ApiError(403, "INVALID_PASSPHRASE", "Incorrect pool passphrase");
     }
 
     // Check pool capacity (best-effort — race window exists but is extremely narrow)

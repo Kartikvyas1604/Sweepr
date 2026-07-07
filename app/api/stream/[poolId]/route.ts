@@ -21,6 +21,7 @@ export async function GET(
 
     const stream = new ReadableStream({
       async start(controller) {
+        const startTime = Date.now();
         try {
           const leaderboard = await computeLeaderboard(poolId);
           controller.enqueue(
@@ -31,6 +32,8 @@ export async function GET(
         } catch (e) {
           logger.warn("SSE initial snapshot failed", { poolId, error: String(e) });
         }
+
+        let pollTimer: ReturnType<typeof setTimeout> | null = null;
 
         const poll = async () => {
           while (!closed) {
@@ -48,6 +51,8 @@ export async function GET(
               logger.warn("SSE poll error", { poolId, error: String(e) });
             }
 
+            if (closed) break;
+
             controller.enqueue(
               encoder.encode(
                 `event: heartbeat\ndata: ${JSON.stringify({ t: Date.now() })}\n\n`,
@@ -55,16 +60,21 @@ export async function GET(
             );
 
             // FIX: heartbeat every 25s matches Vercel's idle timeout
-            await new Promise((r) => setTimeout(r, 25000));
+            await new Promise((r) => { pollTimer = setTimeout(r, 25000); });
           }
         };
 
-        poll();
+        poll().catch((e) => {
+          logger.warn("SSE poll loop crashed", { poolId, error: String(e) });
+        });
       },
       cancel() {
         closed = true;
+        logger.info("SSE client disconnected", { poolId, requestId: request.headers.get("x-request-id") ?? "unknown" });
       },
     });
+
+    logger.info("SSE client connected", { poolId, requestId: request.headers.get("x-request-id") ?? "unknown" });
 
     return new Response(stream, {
       headers: {

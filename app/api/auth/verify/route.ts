@@ -6,6 +6,7 @@ import {
   verifyWalletSignature,
   issueJWT,
 } from "@/lib/auth";
+import { env } from "@/lib/env";
 import { logger } from "@/lib/logger";
 
 const bodySchema = z.object({
@@ -53,7 +54,7 @@ export async function POST(request: Request) {
 
     const token = await issueJWT(wallet);
     const expiresAt = new Date(
-      Date.now() + 86400 * 1000,
+      Date.now() + env.JWT_EXPIRY * 1000,
     ).toISOString();
 
     logger.info("Wallet authenticated", { wallet });

@@ -13,7 +13,6 @@ import {
   type TxLINEStandings,
 } from "@/types/txline";
 import { z } from "zod";
-import { getMockTeams } from "./mock-data";
 
 class TxLINEError extends ApiError {
   constructor(message: string, status = 502) {
@@ -71,22 +70,12 @@ export async function getAllTeams(): Promise<TxLINETeam[]> {
   const cached = await cacheGet(cacheKey, z.array(TxLINETeamSchema));
   if (cached) return cached;
 
-  try {
-    const teams = await fetchFromTxLINE(
-      "/worldcup/teams",
-      z.array(TxLINETeamSchema),
-    );
-    await cacheSet(cacheKey, teams, 86400);
-    return teams;
-  } catch (e) {
-    // FIX: Fallback to mock data if TxLINE teams endpoint fails
-    logger.warn("Failed to fetch teams from TxLINE, using mock data", {
-      error: String(e),
-    });
-    const teams = getMockTeams();
-    await cacheSet(cacheKey, teams, 3600);
-    return teams;
-  }
+  const teams = await fetchFromTxLINE(
+    "/worldcup/teams",
+    z.array(TxLINETeamSchema),
+  );
+  await cacheSet(cacheKey, teams, 86400);
+  return teams;
 }
 
 export async function getFixtures(): Promise<TxLINEFixture[]> {

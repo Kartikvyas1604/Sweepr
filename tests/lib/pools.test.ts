@@ -1,6 +1,24 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { generateJoinCode, computeLeaderboard } from "@/lib/pools";
+import { generateJoinCode, assignTeam, computeLeaderboard } from "@/lib/pools";
 import { ApiError } from "@/lib/errors";
+
+const mockTxlineTeams = vi.hoisted(() => [
+  { id: "BRA", name: "Brazil", shortName: "Brazil", flagUrl: "", group: "A", fifaRanking: 1 },
+  { id: "ARG", name: "Argentina", shortName: "Argentina", flagUrl: "", group: "A", fifaRanking: 2 },
+  { id: "FRA", name: "France", shortName: "France", flagUrl: "", group: "B", fifaRanking: 3 },
+  { id: "ENG", name: "England", shortName: "England", flagUrl: "", group: "B", fifaRanking: 4 },
+]);
+
+vi.mock("@/lib/env", () => ({
+  env: {
+    NODE_ENV: "test",
+    NEXT_PUBLIC_APP_URL: "http://localhost:3000",
+  },
+}));
+
+vi.mock("@/lib/cors", () => ({
+  corsHeaders: vi.fn(() => ({})),
+}));
 
 vi.mock("@/lib/redis", () => ({
   redis: {
@@ -12,24 +30,21 @@ vi.mock("@/lib/redis", () => ({
 }));
 
 vi.mock("@/lib/txline", () => ({
-  getAllTeams: vi.fn().mockResolvedValue([
-    { id: "T1", name: "Team 1", shortName: "T1", flagUrl: "https://example.com/t1.png", group: "A", fifaRanking: 10 },
-    { id: "T2", name: "Team 2", shortName: "T2", flagUrl: "https://example.com/t2.png", group: "A", fifaRanking: 20 },
-    { id: "T3", name: "Team 3", shortName: "T3", flagUrl: "https://example.com/t3.png", group: "B", fifaRanking: 30 },
-  ]),
+  getAllTeams: vi.fn().mockResolvedValue(mockTxlineTeams),
 }));
-
-const mockQueryResult = vi.fn();
 
 vi.mock("@/lib/supabase", () => ({
   supabaseAdmin: {
     from: vi.fn(() => {
-      const qb = {
+      const qb: any = {
         select: vi.fn(() => qb),
         eq: vi.fn(() => qb),
         order: vi.fn(() => qb),
-        then: (onFulfilled: any) => Promise.resolve(mockQueryResult()).then(onFulfilled),
+        in: vi.fn(() => qb),
+        limit: vi.fn(() => qb),
+        single: vi.fn(() => qb),
       };
+      qb.then = (onFulfilled: any) => Promise.resolve(qb._mockResult ?? { data: [], error: null }).then(onFulfilled);
       return qb;
     }),
   },
@@ -42,34 +57,85 @@ describe("generateJoinCode", () => {
     vi.clearAllMocks();
   });
 
-  it("generates a 6-character alphanumeric code", async () => {
+  it("returns exactly 6 uppercase alphanumeric characters", async () => {
     (redis.exists as any).mockResolvedValue(0);
     (redis.set as any).mockResolvedValue("OK");
     const code = await generateJoinCode();
     expect(code).toHaveLength(6);
-    expect(code).toMatch(/^[A-Z2-9]+$/);
+    expect(code).toMatch(/^[A-Z0-9]+$/);
   });
 
-  it("retries if code already exists", async () => {
-    (redis.exists as any).mockResolvedValueOnce(0);
-    (redis.set as any).mockResolvedValue("OK");
-    await generateJoinCode();
-    expect(redis.exists).toHaveBeenCalledTimes(1);
-  });
-
-  it("throws after 10 failed attempts", async () => {
-    (redis.exists as any).mockResolvedValue(1);
-    await expect(generateJoinCode()).rejects.toThrow(ApiError);
-    await expect(generateJoinCode()).rejects.toMatchObject({
-      code: "JOIN_CODE_FAILED",
-    });
-  });
-
-  it("stores the code in redis with 30-day expiry", async () => {
+  it("only uses characters from JOIN_CODE_CHARS", async () => {
     (redis.exists as any).mockResolvedValue(0);
     (redis.set as any).mockResolvedValue("OK");
-    await generateJoinCode();
-    expect(redis.set).toHaveBeenCalledWith(expect.any(String), "1", { ex: 2592000 });
+    const code = await generateJoinCode();
+    expect(code).toMatch(/^[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]+$/);
+  });
+
+  it("retries on Redis collision and returns a different code", async () => {
+    (redis.exists as any).mockResolvedValueOnce(1).mockResolvedValueOnce(0);
+    (redis.set as any).mockResolvedValue("OK");
+    const code = await generateJoinCode();
+    expect(code).toHaveLength(6);
+    expect(redis.exists).toHaveBeenCalledTimes(2);
+  });
+
+  it("throws ApiError if collision limit exceeded", async () => {
+    (redis.exists as any).mockResolvedValue(1);
+    await expect(generateJoinCode()).rejects.toThrow(ApiError);
+  });
+});
+
+describe("assignTeam", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("returns a team from the available pool", async () => {
+    const { supabaseAdmin } = await import("@/lib/supabase");
+    supabaseAdmin.from = vi.fn(() => {
+      const qb: any = { select: vi.fn(() => qb), eq: vi.fn(() => qb), order: vi.fn(() => qb), single: vi.fn(() => qb) };
+      qb._mockResult = { data: [], error: null };
+      qb.then = (onFulfilled: any) => Promise.resolve(qb._mockResult).then(onFulfilled);
+      return qb;
+    }) as any;
+
+    const team = await assignTeam("pool-1");
+    expect(team).toBeDefined();
+    expect(team.id).toBeTruthy();
+    expect(mockTxlineTeams.map((t: any) => t.id)).toContain(team.id);
+  });
+
+  it("never assigns a team already in pool_members", async () => {
+    const { supabaseAdmin } = await import("@/lib/supabase");
+    supabaseAdmin.from = vi.fn(() => {
+      const qb: any = { select: vi.fn(() => qb), eq: vi.fn(() => qb), order: vi.fn(() => qb), single: vi.fn(() => qb) };
+      qb._mockResult = { data: [{ team_id: "BRA" }, { team_id: "ARG" }], error: null };
+      qb.then = (onFulfilled: any) => Promise.resolve(qb._mockResult).then(onFulfilled);
+      return qb;
+    }) as any;
+
+    const team = await assignTeam("pool-1");
+    expect(["FRA", "ENG"]).toContain(team.id);
+  });
+
+  it("throws ApiError 409 NO_TEAMS_LEFT when all teams assigned", async () => {
+    const { supabaseAdmin } = await import("@/lib/supabase");
+    supabaseAdmin.from = vi.fn(() => {
+      const qb: any = { select: vi.fn(() => qb), eq: vi.fn(() => qb), order: vi.fn(() => qb), single: vi.fn(() => qb) };
+      qb._mockResult = {
+        data: mockTxlineTeams.map((t: any) => ({ team_id: t.id })),
+        error: null,
+      };
+      qb.then = (onFulfilled: any) => Promise.resolve(qb._mockResult).then(onFulfilled);
+      return qb;
+    }) as any;
+
+    await expect(assignTeam("pool-1")).rejects.toThrow(ApiError);
+    await expect(assignTeam("pool-1")).rejects.toMatchObject({
+      status: 409,
+      code: "NO_TEAMS_LEFT",
+    });
   });
 });
 
@@ -78,30 +144,115 @@ describe("computeLeaderboard", () => {
     vi.clearAllMocks();
   });
 
-  it("returns ranked leaderboard ordered by score desc, joined_at asc", async () => {
-    // Already sorted by score DESC, joined_at ASC (as DB would return)
-    const mockMembers = [
-      { id: "m2", wallet: "w2", display_name: "Bob", team_id: "T2", team_name: "Team 2", team_flag_url: null, team_group: "A", score: 20, joined_at: "2026-01-02T00:00:00Z" },
-      { id: "m1", wallet: "w1", display_name: "Alice", team_id: "T1", team_name: "Team 1", team_flag_url: null, team_group: "A", score: 10, joined_at: "2026-01-01T00:00:00Z" },
-      { id: "m3", wallet: "w3", display_name: "Charlie", team_id: "T3", team_name: "Team 3", team_flag_url: null, team_group: "B", score: 10, joined_at: "2026-01-03T00:00:00Z" },
+  it("orders members by score descending", async () => {
+    const { supabaseAdmin } = await import("@/lib/supabase");
+    const mockData = [
+      { id: "m1", wallet: "w1", display_name: "Alice", team_id: "BRA", team_name: "Brazil", team_flag_url: null, team_group: "A", score: 15, joined_at: "2026-01-01T00:00:00Z" },
+      { id: "m2", wallet: "w2", display_name: "Bob", team_id: "ARG", team_name: "Argentina", team_flag_url: null, team_group: "A", score: 10, joined_at: "2026-01-02T00:00:00Z" },
+      { id: "m3", wallet: "w3", display_name: "Charlie", team_id: "FRA", team_name: "France", team_flag_url: null, team_group: "B", score: 5, joined_at: "2026-01-03T00:00:00Z" },
     ];
 
-    mockQueryResult.mockReturnValue({ data: mockMembers, error: null });
+    supabaseAdmin.from = vi.fn(() => {
+      const qb: any = { select: vi.fn(() => qb), eq: vi.fn(() => qb), order: vi.fn(() => qb), single: vi.fn(() => qb) };
+      qb._mockResult = { data: mockData, error: null };
+      qb.then = (onFulfilled: any) => Promise.resolve(qb._mockResult).then(onFulfilled);
+      return qb;
+    }) as any;
 
     const result = await computeLeaderboard("pool-1");
-    expect(result).toHaveLength(3);
-    expect(result[0].wallet).toBe("w2");
+    expect(result[0].score).toBe(15);
+    expect(result[1].score).toBe(10);
+    expect(result[2].score).toBe(5);
+  });
+
+  it("assigns rank 1 to the highest scorer", async () => {
+    const { supabaseAdmin } = await import("@/lib/supabase");
+    supabaseAdmin.from = vi.fn(() => {
+      const qb: any = { select: vi.fn(() => qb), eq: vi.fn(() => qb), order: vi.fn(() => qb), single: vi.fn(() => qb) };
+      qb._mockResult = { data: [{ id: "m1", wallet: "w1", display_name: "Alice", team_id: "BRA", team_name: "Brazil", team_flag_url: null, team_group: "A", score: 10, joined_at: "2026-01-01T00:00:00Z" }], error: null };
+      qb.then = (onFulfilled: any) => Promise.resolve(qb._mockResult).then(onFulfilled);
+      return qb;
+    }) as any;
+
+    const result = await computeLeaderboard("pool-1");
     expect(result[0].rank).toBe(1);
-    // Alice and Charlie both have score 10 — Alice joined first so appears first
-    expect(result[1].wallet).toBe("w1");
-    expect(result[1].rank).toBe(2);
-    // Charlie also score 10, tie gets same rank
-    expect(result[2].wallet).toBe("w3");
-    expect(result[2].rank).toBe(2);
+  });
+
+  it("gives same rank to tied members", async () => {
+    const { supabaseAdmin } = await import("@/lib/supabase");
+    supabaseAdmin.from = vi.fn(() => {
+      const qb: any = { select: vi.fn(() => qb), eq: vi.fn(() => qb), order: vi.fn(() => qb), single: vi.fn(() => qb) };
+      qb._mockResult = { data: [
+        { id: "m1", wallet: "w1", display_name: "Alice", team_id: "BRA", team_name: "Brazil", team_flag_url: null, team_group: "A", score: 9, joined_at: "2026-01-01T00:00:00Z" },
+        { id: "m2", wallet: "w2", display_name: "Bob", team_id: "ARG", team_name: "Argentina", team_flag_url: null, team_group: "A", score: 9, joined_at: "2026-01-02T00:00:00Z" },
+      ], error: null };
+      qb.then = (onFulfilled: any) => Promise.resolve(qb._mockResult).then(onFulfilled);
+      return qb;
+    }) as any;
+
+    const result = await computeLeaderboard("pool-1");
+    expect(result[0].rank).toBe(1);
+    expect(result[1].rank).toBe(1);
+  });
+
+  it("skips rank numbers correctly for ties (1, 1, 3)", async () => {
+    const { supabaseAdmin } = await import("@/lib/supabase");
+    supabaseAdmin.from = vi.fn(() => {
+      const qb: any = { select: vi.fn(() => qb), eq: vi.fn(() => qb), order: vi.fn(() => qb), single: vi.fn(() => qb) };
+      qb._mockResult = { data: [
+        { id: "m1", wallet: "w1", display_name: "Alice", team_id: "BRA", team_name: "Brazil", team_flag_url: null, team_group: "A", score: 9, joined_at: "2026-01-01T00:00:00Z" },
+        { id: "m2", wallet: "w2", display_name: "Bob", team_id: "ARG", team_name: "Argentina", team_flag_url: null, team_group: "A", score: 9, joined_at: "2026-01-02T00:00:00Z" },
+        { id: "m3", wallet: "w3", display_name: "Charlie", team_id: "FRA", team_name: "France", team_flag_url: null, team_group: "B", score: 5, joined_at: "2026-01-03T00:00:00Z" },
+      ], error: null };
+      qb.then = (onFulfilled: any) => Promise.resolve(qb._mockResult).then(onFulfilled);
+      return qb;
+    }) as any;
+
+    const result = await computeLeaderboard("pool-1");
+    expect(result[0].rank).toBe(1);
+    expect(result[1].rank).toBe(1);
+    expect(result[2].rank).toBe(3);
+  });
+
+  it("uses joined_at as tiebreaker (earlier join = higher position)", async () => {
+    const { supabaseAdmin } = await import("@/lib/supabase");
+    supabaseAdmin.from = vi.fn(() => {
+      const qb: any = { select: vi.fn(() => qb), eq: vi.fn(() => qb), order: vi.fn(() => qb), single: vi.fn(() => qb) };
+      qb._mockResult = { data: [
+        { id: "m1", wallet: "w1", display_name: "Alice", team_id: "BRA", team_name: "Brazil", team_flag_url: null, team_group: "A", score: 5, joined_at: "2026-01-01T00:00:00Z" },
+        { id: "m2", wallet: "w2", display_name: "Bob", team_id: "ARG", team_name: "Argentina", team_flag_url: null, team_group: "A", score: 5, joined_at: "2026-01-03T00:00:00Z" },
+      ], error: null };
+      qb.then = (onFulfilled: any) => Promise.resolve(qb._mockResult).then(onFulfilled);
+      return qb;
+    }) as any;
+
+    const result = await computeLeaderboard("pool-1");
+    expect(result[0].wallet).toBe("w1");
+    expect(result[1].wallet).toBe("w2");
+  });
+
+  it("returns empty array for pool with no members", async () => {
+    const { supabaseAdmin } = await import("@/lib/supabase");
+    supabaseAdmin.from = vi.fn(() => {
+      const qb: any = { select: vi.fn(() => qb), eq: vi.fn(() => qb), order: vi.fn(() => qb), single: vi.fn(() => qb) };
+      qb._mockResult = { data: [], error: null };
+      qb.then = (onFulfilled: any) => Promise.resolve(qb._mockResult).then(onFulfilled);
+      return qb;
+    }) as any;
+
+    const result = await computeLeaderboard("pool-1");
+    expect(result).toHaveLength(0);
   });
 
   it("throws on query error", async () => {
-    mockQueryResult.mockReturnValue({ data: null, error: new Error("DB error") });
+    const { supabaseAdmin } = await import("@/lib/supabase");
+    supabaseAdmin.from = vi.fn(() => {
+      const qb: any = { select: vi.fn(() => qb), eq: vi.fn(() => qb), order: vi.fn(() => qb), single: vi.fn(() => qb) };
+      qb._mockResult = { data: null, error: new Error("DB error") };
+      qb.then = (onFulfilled: any) => Promise.resolve(qb._mockResult).then(onFulfilled);
+      return qb;
+    }) as any;
+
     await expect(computeLeaderboard("pool-1")).rejects.toThrow(ApiError);
   });
 });

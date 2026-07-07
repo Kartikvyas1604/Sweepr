@@ -1,12 +1,13 @@
 import { z } from "zod";
 
 const envSchema = z.object({
+  NODE_ENV: z.enum(["development", "production", "test"]).default("production"),
   NEXT_PUBLIC_SUPABASE_URL: z.string().url(),
   NEXT_PUBLIC_SUPABASE_ANON_KEY: z.string().min(1),
   SUPABASE_SERVICE_ROLE_KEY: z.string().min(1),
   UPSTASH_REDIS_REST_URL: z.string().url(),
   UPSTASH_REDIS_REST_TOKEN: z.string().min(1),
-  TXLINE_API_KEY: z.string().optional(),
+  TXLINE_API_KEY: z.string().min(1, "TXLINE_API_KEY is required — get one at https://txline.txodds.com"),
   TXLINE_BASE_URL: z.string().url().default("https://txline.txodds.com"),
   JWT_SECRET: z.string().min(32, "JWT_SECRET must be at least 32 characters"),
   JWT_EXPIRY: z.coerce.number().positive().default(86400),

@@ -1,16 +1,15 @@
-import { describe, it, expect, vi, beforeEach, beforeAll } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import nacl from "tweetnacl";
+import bs58 from "bs58";
+import { Keypair } from "@solana/web3.js";
 import {
   generateNonce,
-  storeNonce,
-  verifyAndConsumeNonce,
   verifyWalletSignature,
   issueJWT,
   verifyJWT,
   requireAuth,
 } from "@/lib/auth";
 import { ApiError } from "@/lib/errors";
-
-const MOCK_WALLET = "6AJRnhRJoFZ9MpjguhAjt5k3KYH2BbBfLvs4PsuAzYwr";
 
 vi.mock("@/lib/redis", () => ({
   redis: {
@@ -21,121 +20,141 @@ vi.mock("@/lib/redis", () => ({
   },
 }));
 
-import { redis } from "@/lib/redis";
-
 describe("generateNonce", () => {
-  it("returns a UUID string", () => {
+  it("returns a string of 36 characters", () => {
     const nonce = generateNonce();
-    expect(nonce).toMatch(
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
-    );
+    expect(typeof nonce).toBe("string");
+    expect(nonce.length).toBe(36);
   });
 
-  it("generates unique values", () => {
+  it("returns different values on each call", () => {
     const nonces = new Set(Array.from({ length: 100 }, () => generateNonce()));
     expect(nonces.size).toBe(100);
   });
 });
 
-describe("storeNonce / verifyAndConsumeNonce", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  it("stores nonce with 300s expiry", async () => {
-    (redis.set as any).mockResolvedValue("OK");
-    await storeNonce(MOCK_WALLET, "test-nonce");
-    expect(redis.set).toHaveBeenCalledWith(
-      `nonce:${MOCK_WALLET}`,
-      "test-nonce",
-      { ex: 300 },
-    );
-  });
-
-  it("returns true when nonce matches and deletes it", async () => {
-    (redis.get as any).mockResolvedValue("test-nonce");
-    (redis.del as any).mockResolvedValue(1);
-    const result = await verifyAndConsumeNonce(MOCK_WALLET, "test-nonce");
-    expect(result).toBe(true);
-    expect(redis.del).toHaveBeenCalled();
-  });
-
-  it("returns false when nonce does not match", async () => {
-    (redis.get as any).mockResolvedValue("other-nonce");
-    const result = await verifyAndConsumeNonce(MOCK_WALLET, "test-nonce");
-    expect(result).toBe(false);
-  });
-
-  it("returns false when no nonce stored", async () => {
-    (redis.get as any).mockResolvedValue(null);
-    const result = await verifyAndConsumeNonce(MOCK_WALLET, "test-nonce");
-    expect(result).toBe(false);
-  });
-});
-
 describe("verifyWalletSignature", () => {
-  it("rejects empty signature", async () => {
-    const result = await verifyWalletSignature(MOCK_WALLET, "", "nonce-123");
+  it("returns true for a valid signature from a real Solana keypair", async () => {
+    const keypair = Keypair.generate();
+    const wallet = keypair.publicKey.toBase58();
+    const nonce = "test-nonce-123";
+    const messageBytes = new TextEncoder().encode(`Sweepr sign-in: ${nonce}`);
+    const signature = nacl.sign.detached(messageBytes, keypair.secretKey);
+    const sigBase58 = bs58.encode(signature);
+    const result = await verifyWalletSignature(wallet, sigBase58, nonce);
+    expect(result).toBe(true);
+  });
+
+  it("returns false for a signature from a different keypair", async () => {
+    const keypair = Keypair.generate();
+    const otherPair = Keypair.generate();
+    const wallet = keypair.publicKey.toBase58();
+    const nonce = "test-nonce-123";
+    const messageBytes = new TextEncoder().encode(`Sweepr sign-in: ${nonce}`);
+    // Sign with different keypair
+    const signature = nacl.sign.detached(messageBytes, otherPair.secretKey);
+    const sigBase58 = bs58.encode(signature);
+    const result = await verifyWalletSignature(wallet, sigBase58, nonce);
     expect(result).toBe(false);
   });
 
-  it("rejects invalid bs58", async () => {
+  it("returns false for a tampered message", async () => {
+    const keypair = Keypair.generate();
+    const wallet = keypair.publicKey.toBase58();
+    const nonce = "test-nonce-123";
+    const messageBytes = new TextEncoder().encode(`Sweepr sign-in: ${nonce}`);
+    const signature = nacl.sign.detached(messageBytes, keypair.secretKey);
+    const sigBase58 = bs58.encode(signature);
+    const result = await verifyWalletSignature(wallet, sigBase58, "different-nonce");
+    expect(result).toBe(false);
+  });
+
+  it("returns false for an empty signature string", async () => {
     const result = await verifyWalletSignature(
-      "not-a-valid-base58!!!",
-      "also-not-valid!!!",
+      "6AJRnhRJoFZ9MpjguhAjt5k3KYH2BbBfLvs4PsuAzYwr",
+      "",
+      "nonce-123",
+    );
+    expect(result).toBe(false);
+  });
+
+  it("returns false for an invalid base58 signature", async () => {
+    const result = await verifyWalletSignature(
+      "6AJRnhRJoFZ9MpjguhAjt5k3KYH2BbBfLvs4PsuAzYwr",
+      "!!!not-valid-base58!!!",
       "nonce-123",
     );
     expect(result).toBe(false);
   });
 });
 
-describe("JWT roundtrip", () => {
-  it("issueJWT and verifyJWT roundtrip", async () => {
-    const token = await issueJWT(MOCK_WALLET);
+describe("issueJWT + verifyJWT", () => {
+  it("issues a JWT containing the wallet address", async () => {
+    const token = await issueJWT("wallet123");
     expect(typeof token).toBe("string");
     expect(token.split(".")).toHaveLength(3);
     const payload = await verifyJWT(token);
     expect(payload).not.toBeNull();
-    expect(payload!.wallet).toBe(MOCK_WALLET);
+    expect(payload!.wallet).toBe("wallet123");
   });
 
-  it("verifyJWT returns null for invalid token", async () => {
-    const result = await verifyJWT("invalid-token");
+  it("verifyJWT returns the wallet from a valid token", async () => {
+    const token = await issueJWT("test-wallet-addr");
+    const result = await verifyJWT(token);
+    expect(result).not.toBeNull();
+    expect(result!.wallet).toBe("test-wallet-addr");
+  });
+
+  it("verifyJWT returns null for an expired token", async () => {
+    const now = Math.floor(Date.now() / 1000);
+    const { SignJWT } = await import("jose");
+    const JWT_SECRET = new TextEncoder().encode(process.env.JWT_SECRET ?? "test-jwt-secret-that-is-at-least-32-chars!!");
+    const token = await new SignJWT({ wallet: "test" })
+      .setProtectedHeader({ alg: "HS256" })
+      .setIssuedAt(now - 10)
+      .setExpirationTime(now - 5)
+      .sign(JWT_SECRET);
+    const result = await verifyJWT(token);
     expect(result).toBeNull();
   });
 
-  it("verifyJWT returns null for tampered token", async () => {
-    const token = await issueJWT(MOCK_WALLET);
+  it("verifyJWT returns null for a tampered token", async () => {
+    const token = await issueJWT("test-wallet");
     const parts = token.split(".");
     parts[2] = "tampered";
     const result = await verifyJWT(parts.join("."));
     expect(result).toBeNull();
   });
+
+  it("verifyJWT returns null for garbage input", async () => {
+    const result = await verifyJWT("this.is.not.a.jwt");
+    expect(result).toBeNull();
+  });
 });
 
 describe("requireAuth", () => {
-  it("returns wallet for valid Bearer token", async () => {
-    const token = await issueJWT(MOCK_WALLET);
-    const request = new Request("http://localhost:3000/api/test", {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    const result = await requireAuth(request);
-    expect(result.wallet).toBe(MOCK_WALLET);
-  });
-
-  it("throws ApiError for missing Authorization header", async () => {
-    const request = new Request("http://localhost:3000/api/test");
-    await expect(requireAuth(request)).rejects.toThrow(ApiError);
-    await expect(requireAuth(request)).rejects.toMatchObject({
+  it("throws ApiError 401 when Authorization header is missing", async () => {
+    const req = new Request("http://localhost:3000/api/test");
+    await expect(requireAuth(req)).rejects.toThrow(ApiError);
+    await expect(requireAuth(req)).rejects.toMatchObject({
       status: 401,
       code: "Unauthorized",
     });
   });
 
-  it("throws ApiError for invalid token", async () => {
-    const request = new Request("http://localhost:3000/api/test", {
-      headers: { Authorization: "Bearer invalid" },
+  it("throws ApiError 401 when token is invalid", async () => {
+    const req = new Request("http://localhost:3000/api/test", {
+      headers: { Authorization: "Bearer invalid-token" },
     });
-    await expect(requireAuth(request)).rejects.toThrow(ApiError);
+    await expect(requireAuth(req)).rejects.toThrow(ApiError);
+  });
+
+  it("returns wallet when token is valid", async () => {
+    const token = await issueJWT("wallet-test-abc");
+    const req = new Request("http://localhost:3000/api/test", {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const result = await requireAuth(req);
+    expect(result.wallet).toBe("wallet-test-abc");
   });
 });

@@ -11,7 +11,7 @@ CREATE TABLE pools (
   status              pool_status NOT NULL DEFAULT 'waiting',
   entry_fee_usdc      NUMERIC(18,6) NOT NULL DEFAULT 0
                         CHECK (entry_fee_usdc = 0
-                               OR entry_fee_usdc >= 1),
+                               OR entry_fee_usdc >= 0.0001),
   total_staked_usdc   NUMERIC(18,6) NOT NULL DEFAULT 0,
   escrow_pda          TEXT,
   winner_wallet       TEXT,

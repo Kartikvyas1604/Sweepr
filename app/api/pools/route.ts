@@ -8,11 +8,13 @@ import { deriveEscrowPDA, callInitializePool } from "@/lib/solana";
 import { publishPoolUpdate } from "@/lib/redis";
 import { env } from "@/lib/env";
 import { logger } from "@/lib/logger";
+import { sanitizePoolName } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
   try {
+    await withRateLimit(request, 30, "1m");
     const url = new URL(request.url);
     const wallet = url.searchParams.get("wallet");
 
@@ -121,7 +123,8 @@ export async function POST(request: Request) {
       return handleRouteError(parsed.error);
     }
 
-    const { name, entryFeeUsdc, maxMembers, isPrivate, passphrase } = parsed.data;
+    const { name: rawName, entryFeeUsdc, maxMembers, isPrivate, passphrase } = parsed.data;
+    const name = sanitizePoolName(rawName);
 
     if (entryFeeUsdc > 0 && entryFeeUsdc < 0.0001) {
       throw new ApiError(400, "INVALID_FEE", "Entry fee must be 0 or at least 0.0001 SOL");

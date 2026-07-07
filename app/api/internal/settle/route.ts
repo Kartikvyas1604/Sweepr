@@ -5,11 +5,11 @@ import { callSettlePool } from "@/lib/solana";
 import { publishPoolUpdate } from "@/lib/redis";
 import { env } from "@/lib/env";
 import { logger } from "@/lib/logger";
+import { verifySecret } from "@/lib/security";
 
 export async function POST(request: Request) {
   try {
-    const authKey = request.headers.get("x-inngest-key");
-    if (authKey !== env.INNGEST_EVENT_KEY) {
+    if (!verifySecret(request.headers.get("x-inngest-key") ?? "", env.INNGEST_EVENT_KEY)) {
       throw new ApiError(401, "UNAUTHORIZED", "Invalid Inngest key");
     }
 
@@ -25,6 +25,7 @@ export async function POST(request: Request) {
     let settledCount = 0;
 
     for (const pool of activePools) {
+      logger.info("Attempting pool settlement", { poolId: pool.id, fee: pool.entry_fee_usdc });
       try {
         const leaderboard = await computeLeaderboard(pool.id);
 

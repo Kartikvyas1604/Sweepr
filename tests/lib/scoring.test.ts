@@ -2,15 +2,11 @@ import { describe, it, expect } from "vitest";
 import { processFixtureEvents, SCORING_RULES } from "@/lib/scoring";
 import type { TxLINEEvent, TxLINEFixture } from "@/types/txline";
 
-const POOL_ID = "pool-1";
+const POOL_A = "pool-a";
+const POOL_B = "pool-b";
 const TEAM_A = "T1";
 const TEAM_B = "T2";
-
-const baseMembers = [
-  { teamId: TEAM_A, memberId: "m1", wallet: "wallet1", poolId: POOL_ID },
-  { teamId: TEAM_A, memberId: "m2", wallet: "wallet2", poolId: POOL_ID },
-  { teamId: TEAM_B, memberId: "m3", wallet: "wallet3", poolId: POOL_ID },
-];
+const TEAM_C = "T3";
 
 function makeEvent(overrides: Partial<TxLINEEvent> = {}): TxLINEEvent {
   return {
@@ -25,110 +21,192 @@ function makeEvent(overrides: Partial<TxLINEEvent> = {}): TxLINEEvent {
   };
 }
 
-describe("processFixtureEvents", () => {
-  it("awards points for goal events to the scoring team's members", () => {
-    const events = [makeEvent({ id: "evt_001", type: "goal" })];
-    const results = processFixtureEvents(events, baseMembers, new Set());
-    expect(results).toHaveLength(2);
-    for (const r of results) {
-      expect(r.points).toBe(SCORING_RULES.goal);
-      expect(r.eventType).toBe("goal");
-      expect([TEAM_A]).toContain(r.teamId);
-    }
-    expect(results.map((r) => r.memberId).sort()).toEqual(["m1", "m2"]);
-  });
+function makeFixture(overrides: Partial<TxLINEFixture> = {}): TxLINEFixture {
+  return {
+    id: "f1",
+    homeTeamId: TEAM_A,
+    awayTeamId: TEAM_B,
+    homeTeamName: "Team A",
+    awayTeamName: "Team B",
+    homeScore: 0,
+    awayScore: 0,
+    status: "live",
+    kickoff: "2026-01-01T00:00:00Z",
+    minute: 30,
+    stage: "group",
+    group: "A",
+    ...overrides,
+  };
+}
 
-  it("awards points for penalty events", () => {
-    const events = [makeEvent({ id: "evt_002", type: "penalty" })];
-    const results = processFixtureEvents(events, baseMembers, new Set());
-    expect(results).toHaveLength(2);
-    expect(results[0].points).toBe(SCORING_RULES.penalty);
-  });
+function makeMember(overrides: Partial<{
+  teamId: string;
+  memberId: string;
+  wallet: string;
+  poolId: string;
+}> = {}) {
+  return {
+    teamId: TEAM_A,
+    memberId: "m1",
+    wallet: "wallet1",
+    poolId: POOL_A,
+    ...overrides,
+  };
+}
 
-  it("awards own_goal points to the OPPOSITE team's members when fixture is known", () => {
-    const fixtures: TxLINEFixture[] = [
-      {
-        id: "f1",
-        homeTeamId: TEAM_A,
-        awayTeamId: TEAM_B,
-        homeTeamName: "Team A",
-        awayTeamName: "Team B",
-        homeScore: 0,
-        awayScore: 0,
-        status: "live",
-        kickoff: "2026-01-01T00:00:00Z",
-        minute: 30,
-        stage: "group",
-        group: "A",
-      },
+describe("Goal scoring", () => {
+  it("awards 3 points for a regular goal to the correct member", () => {
+    const events = [makeEvent({ id: "evt_001", type: "goal", teamId: TEAM_A })];
+    const members = [
+      makeMember({ teamId: TEAM_A, memberId: "m1", wallet: "w1" }),
     ];
-    // own_goal by TEAM_A => benefits TEAM_B
-    const events = [makeEvent({ id: "evt_003", type: "own_goal", teamId: TEAM_A })];
-    const results = processFixtureEvents(events, baseMembers, new Set(), fixtures);
+    const results = processFixtureEvents(events, members, new Set());
     expect(results).toHaveLength(1);
-    expect(results[0].memberId).toBe("m3");
-    expect(results[0].points).toBe(SCORING_RULES.own_goal);
+    expect(results[0].memberId).toBe("m1");
+    expect(results[0].points).toBe(3);
+    expect(results[0].eventType).toBe("goal");
+  });
+
+  it("awards 3 points for a penalty goal", () => {
+    const events = [makeEvent({ id: "evt_002", type: "penalty", teamId: TEAM_A })];
+    const members = [
+      makeMember({ teamId: TEAM_A, memberId: "m1" }),
+    ];
+    const results = processFixtureEvents(events, members, new Set());
+    expect(results).toHaveLength(1);
+    expect(results[0].points).toBe(3);
+    expect(results[0].eventType).toBe("penalty");
+  });
+
+  it("awards 1 point for an own_goal to the BENEFITING team, not the scoring team", () => {
+    const fixtures = [makeFixture({ id: "f1", homeTeamId: TEAM_A, awayTeamId: TEAM_B })];
+    const events = [makeEvent({ id: "evt_003", type: "own_goal", teamId: TEAM_A })];
+    const members = [
+      makeMember({ teamId: TEAM_A, memberId: "m_scorer" }),
+      makeMember({ teamId: TEAM_B, memberId: "m_beneficiary" }),
+    ];
+    const results = processFixtureEvents(events, members, new Set(), fixtures);
+    expect(results).toHaveLength(1);
+    expect(results[0].memberId).toBe("m_beneficiary");
+    expect(results[0].points).toBe(1);
+  });
+
+  it("awards 0 points for red_card events", () => {
+    const events = [makeEvent({ id: "evt_004", type: "red_card" })];
+    const members = [makeMember({ teamId: TEAM_A, memberId: "m1" })];
+    const results = processFixtureEvents(events, members, new Set());
+    expect(results).toHaveLength(0);
+  });
+
+  it("awards 0 points for yellow_card events", () => {
+    const events = [makeEvent({ id: "evt_005", type: "yellow_card" })];
+    const members = [makeMember({ teamId: TEAM_A, memberId: "m1" })];
+    const results = processFixtureEvents(events, members, new Set());
+    expect(results).toHaveLength(0);
+  });
+});
+
+describe("Idempotency", () => {
+  it("skips events whose IDs are in processedNonces set", () => {
+    const events = [makeEvent({ id: "evt_001", type: "goal" })];
+    const members = [makeMember({ teamId: TEAM_A, memberId: "m1" })];
+    const processed = new Set(["evt_001"]);
+    const results = processFixtureEvents(events, members, processed);
+    expect(results).toHaveLength(0);
+  });
+
+  it("does not skip events with new IDs", () => {
+    const events = [makeEvent({ id: "evt_new", type: "goal" })];
+    const members = [makeMember({ teamId: TEAM_A, memberId: "m1" })];
+    const processed = new Set(["evt_001", "evt_002"]);
+    const results = processFixtureEvents(events, members, processed);
+    expect(results).toHaveLength(1);
+  });
+
+  it("processes same fixture twice safely — second pass adds 0 points", () => {
+    const events = [makeEvent({ id: "evt_001", type: "goal" })];
+    const members = [makeMember({ teamId: TEAM_A, memberId: "m1" })];
+    const processed = new Set<string>();
+    const pass1 = processFixtureEvents(events, members, processed);
+    expect(pass1).toHaveLength(1);
+    processed.add("evt_001");
+    const pass2 = processFixtureEvents(events, members, processed);
+    expect(pass2).toHaveLength(0);
+  });
+});
+
+describe("Multi-pool isolation", () => {
+  it("only assigns points to members in the correct pool", () => {
+    const events = [makeEvent({ id: "evt_001", type: "goal", teamId: TEAM_A })];
+    const members = [
+      makeMember({ teamId: TEAM_A, memberId: "m_a", poolId: POOL_A }),
+      makeMember({ teamId: TEAM_A, memberId: "m_b", poolId: POOL_B }),
+    ];
+    const results = processFixtureEvents(events, members, new Set());
+    expect(results).toHaveLength(2);
+    expect(results.map((r) => r.poolId).sort()).toEqual([POOL_A, POOL_B]);
+  });
+
+  it("handles same team appearing in two different pools independently", () => {
+    const events = [makeEvent({ id: "evt_001", type: "goal", teamId: TEAM_A })];
+    const members = [
+      makeMember({ teamId: TEAM_A, memberId: "m1", poolId: POOL_A }),
+      makeMember({ teamId: TEAM_A, memberId: "m2", poolId: POOL_B }),
+    ];
+    const results = processFixtureEvents(events, members, new Set());
+    expect(results.map((r) => r.memberId).sort()).toEqual(["m1", "m2"]);
+    expect(results[0].poolId).not.toBe(results[1].poolId);
+  });
+});
+
+describe("Edge cases", () => {
+  it("handles empty events array without throwing", () => {
+    const results = processFixtureEvents([], [makeMember()], new Set());
+    expect(results).toHaveLength(0);
+  });
+
+  it("handles fixture with no members assigned to either team", () => {
+    const events = [makeEvent({ id: "evt_001", type: "goal", teamId: TEAM_C })];
+    const members = [makeMember({ teamId: TEAM_A, memberId: "m1" })];
+    const results = processFixtureEvents(events, members, new Set());
+    expect(results).toHaveLength(0);
+  });
+
+  it("handles own_goal when no member is assigned to benefiting team", () => {
+    const fixtures = [makeFixture({ id: "f1", homeTeamId: TEAM_A, awayTeamId: TEAM_B })];
+    const events = [makeEvent({ id: "evt_001", type: "own_goal", teamId: TEAM_A })];
+    const members = [makeMember({ teamId: TEAM_A, memberId: "m1" })]; // no one on TEAM_B
+    const results = processFixtureEvents(events, members, new Set(), fixtures);
+    expect(results).toHaveLength(0);
+  });
+
+  it("handles pool with only 2 members", () => {
+    const events = [makeEvent({ id: "evt_001", type: "goal", teamId: TEAM_A })];
+    const members = [
+      makeMember({ teamId: TEAM_A, memberId: "m1" }),
+      makeMember({ teamId: TEAM_B, memberId: "m2" }),
+    ];
+    const results = processFixtureEvents(events, members, new Set());
+    expect(results).toHaveLength(1);
+    expect(results[0].memberId).toBe("m1");
   });
 
   it("handles own_goal fallback when fixture is unknown", () => {
-    const events = [makeEvent({ id: "evt_004", type: "own_goal", teamId: TEAM_A })];
-    const results = processFixtureEvents(events, baseMembers, new Set());
-    // Without fixture, it pools by poolId and gives to opponents
+    const events = [makeEvent({ id: "evt_001", type: "own_goal", teamId: TEAM_A })];
+    const members = [
+      makeMember({ teamId: TEAM_A, memberId: "m_scorer" }),
+      makeMember({ teamId: TEAM_B, memberId: "m_beneficiary" }),
+    ];
+    const results = processFixtureEvents(events, members, new Set());
     expect(results).toHaveLength(1);
-    expect(results[0].memberId).toBe("m3");
+    expect(results[0].memberId).toBe("m_beneficiary");
   });
 
-  it("skips already-processed events by nonce", () => {
-    const events = [makeEvent({ id: "evt_001", type: "goal" })];
-    const processed = new Set(["evt_001"]);
-    const results = processFixtureEvents(events, baseMembers, processed);
-    expect(results).toHaveLength(0);
-  });
-
-  it("skips non-scoring event types (red_card, yellow_card)", () => {
-    const events = [
-      makeEvent({ id: "evt_005", type: "red_card" }),
-      makeEvent({ id: "evt_006", type: "yellow_card" }),
-    ];
-    const results = processFixtureEvents(events, baseMembers, new Set());
-    expect(results).toHaveLength(0);
-  });
-
-  it("handles empty events array", () => {
-    const results = processFixtureEvents([], baseMembers, new Set());
-    expect(results).toHaveLength(0);
-  });
-
-  it("handles empty members array", () => {
-    const events = [makeEvent({ id: "evt_001" })];
-    const results = processFixtureEvents(events, [], new Set());
-    expect(results).toHaveLength(0);
-  });
-
-  it("handles members from multiple pools", () => {
-    const multiPoolMembers = [
-      ...baseMembers,
-      { teamId: TEAM_A, memberId: "m4", wallet: "wallet4", poolId: "pool-2" },
-    ];
-    const events = [makeEvent({ id: "evt_007", type: "goal" })];
-    const results = processFixtureEvents(events, multiPoolMembers, new Set());
-    expect(results).toHaveLength(3);
-    const poolIds = [...new Set(results.map((r) => r.poolId))];
-    expect(poolIds).toContain(POOL_ID);
-    expect(poolIds).toContain("pool-2");
-  });
-
-  it("sets playerName and minute from the event", () => {
-    const events = [
-      makeEvent({
-        id: "evt_008",
-        type: "goal",
-        minute: 42,
-        playerName: "Lionel Messi",
-      }),
-    ];
-    const results = processFixtureEvents(events, baseMembers, new Set());
+  it("carries playerName and minute through to results", () => {
+    const events = [makeEvent({ id: "evt_001", type: "goal", minute: 42, playerName: "Messi" })];
+    const members = [makeMember({ teamId: TEAM_A, memberId: "m1" })];
+    const results = processFixtureEvents(events, members, new Set());
     expect(results[0].minute).toBe(42);
-    expect(results[0].playerName).toBe("Lionel Messi");
+    expect(results[0].playerName).toBe("Messi");
   });
 });

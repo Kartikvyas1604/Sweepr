@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import { logger } from "@/lib/logger";
 
 const ALLOWED_ORIGINS = [
   process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, ""),
@@ -7,10 +8,25 @@ const ALLOWED_ORIGINS = [
   "http://localhost:3001",
 ].filter(Boolean) as string[];
 
+const MAX_BODY_SIZE = 100_000;
+
 export function middleware(request: NextRequest) {
   const requestId = crypto.randomUUID();
 
-  // Inject request ID for log correlation
+  if (
+    request.method !== "GET" &&
+    request.method !== "HEAD" &&
+    request.method !== "OPTIONS"
+  ) {
+    const contentLength = request.headers.get("content-length");
+    if (contentLength && parseInt(contentLength) > MAX_BODY_SIZE) {
+      return NextResponse.json(
+        { error: "Request body too large", code: "PAYLOAD_TOO_LARGE", status: 413 },
+        { status: 413 },
+      );
+    }
+  }
+
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set("x-request-id", requestId);
 
@@ -19,7 +35,6 @@ export function middleware(request: NextRequest) {
   });
   response.headers.set("x-request-id", requestId);
 
-  // CORS enforcement on API routes
   if (request.nextUrl.pathname.startsWith("/api/")) {
     const origin = request.headers.get("origin") ?? "";
     const isInternal =
@@ -38,7 +53,6 @@ export function middleware(request: NextRequest) {
       ? origin
       : ALLOWED_ORIGINS[0] ?? "";
 
-    // Add CORS headers
     response.headers.set("Access-Control-Allow-Origin", allowedOrigin);
     response.headers.set(
       "Access-Control-Allow-Methods",
@@ -50,7 +64,6 @@ export function middleware(request: NextRequest) {
     );
     response.headers.set("Access-Control-Max-Age", "86400");
 
-    // Handle preflight
     if (request.method === "OPTIONS") {
       return new NextResponse(null, {
         status: 204,
@@ -66,22 +79,16 @@ export function middleware(request: NextRequest) {
     }
   }
 
-  // Log every request
   const url = request.nextUrl.pathname;
   const method = request.method;
   const wallet = request.headers.get("authorization")?.slice(0, 20) ?? "none";
 
-  console.log(
-    JSON.stringify({
-      level: "info",
-      message: "request",
-      timestamp: new Date().toISOString(),
-      requestId,
-      method,
-      path: url,
-      wallet: wallet.length > 10 ? `${wallet}...` : wallet,
-    }),
-  );
+  logger.info("request", {
+    requestId,
+    method,
+    path: url,
+    wallet: wallet.length > 10 ? `${wallet}...` : wallet,
+  });
 
   return response;
 }

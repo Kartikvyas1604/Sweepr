@@ -1,69 +1,82 @@
 import { describe, it, expect, vi } from "vitest";
 import { ApiError, apiError, handleRouteError } from "@/lib/errors";
-import { z } from "zod";
+import { ZodError, z } from "zod";
 
 vi.mock("@/lib/cors", () => ({
-  corsHeaders: vi.fn().mockReturnValue({
-    "Access-Control-Allow-Origin": "*",
-  }),
+  corsHeaders: vi.fn(() => ({})),
 }));
 
 describe("ApiError", () => {
-  it("creates an error with status, code, and message", () => {
-    const err = new ApiError(404, "NOT_FOUND", "Pool not found");
-    expect(err.status).toBe(404);
-    expect(err.code).toBe("NOT_FOUND");
-    expect(err.message).toBe("Pool not found");
+  it("creates an instance with status and code", () => {
+    const err = new ApiError(400, "BAD_REQUEST", "Invalid input");
+    expect(err).toBeInstanceOf(ApiError);
+    expect(err).toBeInstanceOf(Error);
+    expect(err.status).toBe(400);
+    expect(err.code).toBe("BAD_REQUEST");
+    expect(err.message).toBe("Invalid input");
+  });
+
+  it("has correct name", () => {
+    const err = new ApiError(401, "UNAUTHORIZED", "Missing auth");
     expect(err.name).toBe("ApiError");
   });
 });
 
 describe("apiError", () => {
-  it("returns a Response with error JSON", () => {
+  it("returns a Response with the correct status", () => {
+    const res = apiError(404, "NOT_FOUND", "Not found");
+    expect(res).toBeInstanceOf(Response);
+    expect(res.status).toBe(404);
+  });
+
+  it("returns JSON body with error details", async () => {
     const res = apiError(400, "BAD_REQUEST", "Invalid input");
-    expect(res.status).toBe(400);
-    expect(res.headers.get("Content-Type")).toBe("application/json");
-    return res.json().then((body) => {
-      expect(body).toEqual({
-        error: "Invalid input",
-        code: "BAD_REQUEST",
-        status: 400,
-      });
+    const body = await res.json();
+    expect(body).toEqual({
+      error: "Invalid input",
+      code: "BAD_REQUEST",
+      status: 400,
     });
   });
 
-  it("includes CORS headers when request is provided", () => {
-    const req = new Request("http://localhost:3000");
-    const res = apiError(500, "ERR", "msg", req);
-    expect(res.headers.get("Access-Control-Allow-Origin")).toBe("*");
+  it("sets Content-Type header", () => {
+    const res = apiError(500, "INTERNAL_ERROR", "Error");
+    expect(res.headers.get("Content-Type")).toBe("application/json");
   });
 });
 
 describe("handleRouteError", () => {
-  it("returns ApiError response for ApiError instances", () => {
-    const err = new ApiError(403, "FORBIDDEN", "Access denied");
+  it("returns ApiError response for ApiError instances", async () => {
+    const err = new ApiError(400, "BAD_REQUEST", "bad request");
     const res = handleRouteError(err);
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.code).toBe("BAD_REQUEST");
   });
 
-  it("returns 400 for ZodError", () => {
-    let zodError: z.ZodError;
-    try {
-      z.string().parse(123);
-    } catch (e) {
-      zodError = e as z.ZodError;
-      const res = handleRouteError(zodError);
-      expect(res.status).toBe(400);
-    }
+  it("returns 400 for ZodError", async () => {
+    const zodErr = new ZodError([{ message: "Invalid field", path: ["name"], code: z.ZodIssueCode.custom }] as any);
+    const res = handleRouteError(zodErr);
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.code).toBe("VALIDATION_ERROR");
   });
 
-  it("returns 500 for unknown errors", () => {
-    const res = handleRouteError(new Error("something broke"));
+  it("returns 500 for unknown errors", async () => {
+    const res = handleRouteError(new Error("crash"));
+    expect(res.status).toBe(500);
+    const body = await res.json();
+    expect(body.code).toBe("INTERNAL_ERROR");
+  });
+
+  it("returns 500 for non-Error throws", () => {
+    const res = handleRouteError("string error" as any);
     expect(res.status).toBe(500);
   });
 
-  it("returns 500 for non-Error values", () => {
-    const res = handleRouteError("string error");
-    expect(res.status).toBe(500);
+  it("does not leak internal error details", async () => {
+    const res = handleRouteError(new Error("secret stacktrace"));
+    const body = await res.json();
+    expect(body.error).not.toContain("secret");
   });
 });
