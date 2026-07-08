@@ -86,19 +86,31 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
 }
 
 async function signWithProvider(provider: any, message: string): Promise<string | null> {
+  if (!provider.signMessage) {
+    console.error("[signWithProvider] provider.signMessage is not available", {
+      hasProvider: !!provider,
+      keys: provider ? Object.keys(provider) : [],
+    });
+    return null;
+  }
   const encoded = new TextEncoder().encode(message);
   let result: any;
   try {
     result = await withTimeout(provider.signMessage(encoded), 120_000);
-  } catch {
+  } catch (e: any) {
+    console.warn("[signWithProvider] first attempt failed", { error: e?.message ?? e, code: e?.code });
     try {
       result = await withTimeout(provider.signMessage(encoded, "utf8"), 120_000);
-    } catch {
+    } catch (e2: any) {
+      console.error("[signWithProvider] second attempt also failed", { error: e2?.message ?? e2, code: e2?.code });
       return null;
     }
   }
   const sigBytes = extractSignatureBytes(result);
-  if (!sigBytes) return null;
+  if (!sigBytes) {
+    console.error("[signWithProvider] could not extract signature bytes from result", { resultType: typeof result, hasSignature: !!result?.signature });
+    return null;
+  }
   return bs58.encode(sigBytes);
 }
 
@@ -163,19 +175,26 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     const provider = await getWalletProvider(address);
     let wallet = address;
 
-    if (!wallet || !isValidSolanaAddress(wallet)) {
-      wallet = tryExtractWallet(provider, { publicKey: provider.publicKey });
+    // Establish/verify wallet session to ensure signMessage is available
+    if (provider.connect) {
+      try {
+        const session = await provider.connect();
+        const sessionWallet = tryExtractWallet(provider, session);
+        if (sessionWallet) wallet = sessionWallet;
+      } catch (e: any) {
+        if (e.code === 4001) throw new Error("Connection rejected by wallet");
+      }
     }
 
     if (!wallet || !isValidSolanaAddress(wallet)) {
-      const connectResult = await provider.connect();
-      wallet = tryExtractWallet(provider, connectResult);
+      wallet = tryExtractWallet(provider, { publicKey: provider.publicKey });
     }
     if (!wallet || !isValidSolanaAddress(wallet)) {
       throw new Error("Invalid wallet address — expected a valid Solana pubkey");
     }
     setAddress(wallet);
     storeWallet(wallet);
+
     try {
       await doAuth(provider, wallet);
     } catch (e: any) {
