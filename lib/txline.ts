@@ -74,7 +74,7 @@ export async function getAllTeams(): Promise<TxLINETeam[]> {
   if (cached) return cached;
 
   const teams = await fetchFromTxLINE(
-    "/worldcup/teams",
+    "/api/worldcup/teams",
     z.array(TxLINETeamSchema),
   );
   await cacheSet(cacheKey, teams, 86400);
@@ -87,7 +87,7 @@ export async function getFixtures(): Promise<TxLINEFixture[]> {
   if (cached) return cached;
 
   const fixtures = await fetchFromTxLINE(
-    "/worldcup/fixtures",
+    "/api/worldcup/fixtures",
     z.array(TxLINEFixtureSchema),
   );
   await cacheSet(cacheKey, fixtures, 300);
@@ -100,7 +100,7 @@ export async function getLiveFixtures(): Promise<TxLINEFixture[]> {
   if (cached) return cached;
 
   const fixtures = await fetchFromTxLINE(
-    "/worldcup/fixtures/live",
+    "/api/worldcup/fixtures/live",
     z.array(TxLINEFixtureSchema),
   );
   await cacheSet(cacheKey, fixtures, 30);
@@ -115,7 +115,7 @@ export async function getFixtureEvents(
   if (cached) return cached;
 
   const events = await fetchFromTxLINE(
-    `/worldcup/fixtures/${fixtureId}/events`,
+    `/api/worldcup/fixtures/${fixtureId}/events`,
     z.array(TxLINEEventSchema),
   );
   const filtered = events.filter(
@@ -131,7 +131,7 @@ export async function getStandings(): Promise<TxLINEStandings[]> {
   if (cached) return cached;
 
   const standings = await fetchFromTxLINE(
-    "/worldcup/standings",
+    "/api/worldcup/standings",
     z.array(TxLINEStandingsSchema),
   );
   await cacheSet(cacheKey, standings, 300);
