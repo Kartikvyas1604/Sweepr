@@ -1,18 +1,13 @@
 use anchor_lang::prelude::*;
 
 /// Backend oracle wallet that calls update_score and settle_pool.
-/// Replace with your actual oracle pubkey before mainnet deployment.
+/// Must match ORACLE_PUBKEY in .env.
 #[constant]
-pub const ORACLE_PUBKEY: Pubkey = pubkey!("EVmpTnRpuJhdGGyyDuV7gv7AuaK1XMErxcjp4nr4gJqb");
+pub const ORACLE_PUBKEY: Pubkey = pubkey!("HFstWQ2TcKGyvqD8Gq97fyHkgvahYteMnrhzq124WCkf");
 
-/// Protocol fee wallet that receives 5% of settled pools.
-/// Replace with your actual fee wallet before mainnet deployment.
+/// Protocol fee in basis points (250 = 2.5%).
 #[constant]
-pub const PROTOCOL_FEE_WALLET: Pubkey = pubkey!("Hb17qysxGiG6LPGXNqEYpZKfQH7Fc7XDGkVJvqx4zSLp");
-
-/// Protocol fee in basis points (500 = 5%).
-#[constant]
-pub const PROTOCOL_FEE_BPS: u64 = 500;
+pub const PROTOCOL_FEE_BPS: u64 = 250;
 
 /// Minimum entry fee (1 USDC in micro-units).
 #[constant]

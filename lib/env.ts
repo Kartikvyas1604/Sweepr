@@ -1,4 +1,7 @@
 import { z } from "zod";
+import { logger } from "./logger";
+
+const isDev = process.env.NODE_ENV === "development" || process.env.NODE_ENV === "test";
 
 const envSchema = z.object({
   NODE_ENV: z.enum(["development", "production", "test"]).default("production"),
@@ -7,15 +10,16 @@ const envSchema = z.object({
   SUPABASE_SERVICE_ROLE_KEY: z.string().min(1),
   UPSTASH_REDIS_REST_URL: z.string().url(),
   UPSTASH_REDIS_REST_TOKEN: z.string().min(1),
-  TXLINE_API_KEY: z.string().min(1, "TXLINE_API_KEY is required — get one at https://txline.txodds.com"),
-  TXLINE_BASE_URL: z.string().url().default("https://txline.txodds.com"),
+  TXLINE_API_KEY: isDev ? z.string().default("dev-placeholder") : z.string().min(1),
+  TXLINE_BASE_URL: z.string().url().default("https://txline-dev.txodds.com"),
+  TXLINE_LEAGUES: z.string().default(""),
   JWT_SECRET: z.string().min(32, "JWT_SECRET must be at least 32 characters"),
   JWT_EXPIRY: z.coerce.number().positive().default(86400),
   SETTLEMENT_KEYPAIR: z.string().min(1),
   ORACLE_PUBKEY: z.string().min(1),
   PROTOCOL_FEE_WALLET: z.string().min(1),
   NEXT_PUBLIC_SOLANA_RPC: z.string().url(),
-  SOLANA_NETWORK: z.enum(["mainnet-beta", "devnet", "testnet"]).default("mainnet-beta"),
+  SOLANA_NETWORK: z.enum(["mainnet-beta", "devnet", "testnet"]).default("devnet"),
   SWEEPR_PROGRAM_ID: z.string().min(1),
   INNGEST_EVENT_KEY: z.string().min(1),
   INNGEST_SIGNING_KEY: z.string().min(1),

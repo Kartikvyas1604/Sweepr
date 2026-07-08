@@ -35,7 +35,7 @@ JWT_EXPIRY=86400
 
 SOLANA_KEYPAIR={"your":"local-wallet-keypair-json"}
 ORACLE_PUBKEY=EVmpTnRpuJhdGGyyDuV7gv7AuaK1XMErxcjp4nr4gJqb
-PROTOCOL_FEE_WALLET=Hb17qysxGiG6LPGXNqEYpZKfQH7Fc7XDGkVJvqx4zSLp
+PROTOCOL_FEE_WALLET=your-fee-wallet-address
 USDC_MINT=Gh9ZwEmdLJ8DscKNTkTqPbNwLNNBjuSzaG9Vp2KGtKJr
 ```
 

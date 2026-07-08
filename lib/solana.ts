@@ -344,6 +344,7 @@ export async function callSettlePool(
     const [memberPda] = deriveMemberPDA(poolId, winnerWallet);
     const escrowAta = await getEscrowAta(poolId);
     const usdcMint = getUsdcMint();
+    const feeWallet = new PublicKey(env.PROTOCOL_FEE_WALLET);
 
     // NOTE: All pools are on-chain free pools — USDC accounts are always null.
     const winnerUsdcAta = null;
@@ -359,6 +360,8 @@ export async function callSettlePool(
         oracle: getOracleKeypair().publicKey,
         poolState: poolPda,
         winnerMemberState: memberPda,
+        winner: new PublicKey(winnerWallet),
+        protocolFeeReceiver: feeWallet,
         winnerUsdcAta: winnerUsdcAta,
         escrowVault: escrowVaultAccount,
         protocolFeeAta: protocolFeeAta,

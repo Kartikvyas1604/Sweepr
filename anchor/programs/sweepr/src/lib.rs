@@ -1,4 +1,5 @@
 use anchor_lang::prelude::*;
+use anchor_lang::solana_program::program::invoke_signed;
 use anchor_spl::{
     associated_token::AssociatedToken,
     token::{Mint, Token, TokenAccount, Transfer, transfer},
@@ -222,6 +223,68 @@ pub mod sweepr {
             transfer(payout_transfer_ctx, payout)?;
         }
 
+        // Distribute SOL from pool PDA (used for free pools with SOL entry fees)
+        let pool_lamports = pool_state_info.lamports();
+        let rent = Rent::get()?;
+        let rent_exempt = rent.minimum_balance(PoolState::INIT_SPACE + 8);
+
+        if pool_lamports > rent_exempt {
+            let distributable = pool_lamports
+                .checked_sub(rent_exempt)
+                .ok_or(SweeprError::ArithmeticOverflow)?;
+
+            let fee = distributable
+                .checked_mul(PROTOCOL_FEE_BPS)
+                .ok_or(SweeprError::ArithmeticOverflow)?
+                .checked_div(10_000)
+                .ok_or(SweeprError::ArithmeticOverflow)?;
+
+            let payout = distributable
+                .checked_sub(fee)
+                .ok_or(SweeprError::ArithmeticOverflow)?;
+
+            let seeds = &[
+                b"pool",
+                pool_id.as_ref(),
+                &[pool_bump],
+            ];
+            let signer_seeds = &[&seeds[..]];
+
+            if fee > 0 {
+                let fee_ix = anchor_lang::solana_program::system_instruction::transfer(
+                    &pool_state_info.key(),
+                    &ctx.accounts.protocol_fee_receiver.key(),
+                    fee,
+                );
+                invoke_signed(
+                    &fee_ix,
+                    &[
+                        pool_state_info.clone(),
+                        ctx.accounts.protocol_fee_receiver.to_account_info(),
+                        ctx.accounts.system_program.to_account_info(),
+                    ],
+                    signer_seeds,
+                )?;
+            }
+
+            if payout > 0 {
+                let payout_ix = anchor_lang::solana_program::system_instruction::transfer(
+                    &pool_state_info.key(),
+                    &ctx.accounts.winner.key(),
+                    payout,
+                );
+                invoke_signed(
+                    &payout_ix,
+                    &[
+                        pool_state_info.clone(),
+                        ctx.accounts.winner.to_account_info(),
+                        ctx.accounts.system_program.to_account_info(),
+                    ],
+                    signer_seeds,
+                )?;
+            }
+        }
+
         let clock = Clock::get()?;
         pool.status = PoolStatus::Settled;
         pool.winner = Some(winner_wallet);
@@ -371,6 +434,14 @@ pub struct SettlePool<'info> {
         bump = winner_member_state.bump,
     )]
     pub winner_member_state: Account<'info, MemberState>,
+
+    /// Winner wallet that receives 97.5% of SOL pot
+    #[account(mut)]
+    pub winner: SystemAccount<'info>,
+
+    /// Protocol fee wallet that receives 2.5% of SOL pot (set via PROTOCOL_FEE_WALLET env)
+    #[account(mut)]
+    pub protocol_fee_receiver: SystemAccount<'info>,
 
     #[account(
         mut,

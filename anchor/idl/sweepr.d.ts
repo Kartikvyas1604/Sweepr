@@ -47,7 +47,7 @@ export type Sweepr = {
       name: "updateScore";
       discriminator: [188, 226, 238, 41, 14, 241, 105, 215];
       accounts: [
-        { name: "oracle"; writable: true; signer: true },
+        { name: "oracle"; writable: true; signer: true; address: "HFstWQ2TcKGyvqD8Gq97fyHkgvahYteMnrhzq124WCkf" },
         { name: "poolState"; writable: true },
         { name: "memberState"; writable: true },
         { name: "eventNonceAccount"; writable: true; pda: { seeds: [{ kind: "const"; value: [101, 118, 101, 110, 116] }, { kind: "arg"; path: "eventNonce" }] } },
@@ -64,9 +64,11 @@ export type Sweepr = {
       name: "settlePool";
       discriminator: [186, 11, 231, 111, 242, 241, 203, 64];
       accounts: [
-        { name: "oracle"; signer: true },
+        { name: "oracle"; signer: true; address: "HFstWQ2TcKGyvqD8Gq97fyHkgvahYteMnrhzq124WCkf" },
         { name: "poolState"; writable: true },
         { name: "winnerMemberState"; writable: false },
+        { name: "winner"; writable: true; signer: false },
+        { name: "protocolFeeReceiver"; writable: true; signer: false },
         { name: "winnerUsdcAta"; writable: true; optional: true },
         { name: "escrowVault"; writable: true; optional: true },
         { name: "protocolFeeAta"; writable: true; optional: true },

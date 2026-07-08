@@ -37,32 +37,9 @@ export function middleware(request: NextRequest) {
 
   if (request.nextUrl.pathname.startsWith("/api/")) {
     const origin = request.headers.get("origin") ?? "";
-    const isInternal =
-      !origin ||
-      ALLOWED_ORIGINS.includes(origin) ||
-      origin.includes("localhost");
-
-    if (!isInternal && request.method !== "OPTIONS") {
-      return NextResponse.json(
-        { error: "CORS: origin not allowed", code: "CORS_ERROR", status: 403 },
-        { status: 403 },
-      );
-    }
-
     const allowedOrigin = ALLOWED_ORIGINS.includes(origin)
       ? origin
-      : ALLOWED_ORIGINS[0] ?? "";
-
-    response.headers.set("Access-Control-Allow-Origin", allowedOrigin);
-    response.headers.set(
-      "Access-Control-Allow-Methods",
-      "GET, POST, PUT, DELETE, OPTIONS",
-    );
-    response.headers.set(
-      "Access-Control-Allow-Headers",
-      "Content-Type, Authorization, x-inngest-key, x-request-id",
-    );
-    response.headers.set("Access-Control-Max-Age", "86400");
+      : ALLOWED_ORIGINS[0] ?? "*";
 
     if (request.method === "OPTIONS") {
       return new NextResponse(null, {
@@ -77,6 +54,17 @@ export function middleware(request: NextRequest) {
         },
       });
     }
+
+    response.headers.set("Access-Control-Allow-Origin", allowedOrigin);
+    response.headers.set(
+      "Access-Control-Allow-Methods",
+      "GET, POST, PUT, DELETE, OPTIONS",
+    );
+    response.headers.set(
+      "Access-Control-Allow-Headers",
+      "Content-Type, Authorization, x-inngest-key, x-request-id",
+    );
+    response.headers.set("Access-Control-Max-Age", "86400");
   }
 
   const url = request.nextUrl.pathname;

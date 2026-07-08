@@ -377,7 +377,7 @@
         {
           "name": "oracle",
           "signer": true,
-          "address": "EVmpTnRpuJhdGGyyDuV7gv7AuaK1XMErxcjp4nr4gJqb"
+          "address": "HFstWQ2TcKGyvqD8Gq97fyHkgvahYteMnrhzq124WCkf"
         },
         {
           "name": "pool_state",
@@ -425,6 +425,16 @@
               }
             ]
           }
+        },
+        {
+          "name": "winner",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "name": "protocol_fee_receiver",
+          "writable": true,
+          "signer": false
         },
         {
           "name": "winner_usdc_ata",
@@ -486,7 +496,7 @@
           "name": "oracle",
           "writable": true,
           "signer": true,
-          "address": "EVmpTnRpuJhdGGyyDuV7gv7AuaK1XMErxcjp4nr4gJqb"
+          "address": "HFstWQ2TcKGyvqD8Gq97fyHkgvahYteMnrhzq124WCkf"
         },
         {
           "name": "pool_state",
@@ -871,28 +881,26 @@
     {
       "name": "ORACLE_PUBKEY",
       "docs": [
-        "Backend oracle wallet that calls update_score and settle_pool.",
-        "Replace with your actual oracle pubkey before mainnet deployment."
+        "Backend oracle wallet that calls update_score and settle_pool. Must match ORACLE_PUBKEY in .env."
       ],
       "type": "pubkey",
-      "value": "EVmpTnRpuJhdGGyyDuV7gv7AuaK1XMErxcjp4nr4gJqb"
+      "value": "HFstWQ2TcKGyvqD8Gq97fyHkgvahYteMnrhzq124WCkf"
     },
     {
       "name": "PROTOCOL_FEE_BPS",
       "docs": [
-        "Protocol fee in basis points (500 = 5%)."
+        "Protocol fee in basis points (250 = 2.5%)."
       ],
       "type": "u64",
-      "value": "500"
+      "value": "250"
     },
     {
       "name": "PROTOCOL_FEE_WALLET",
       "docs": [
-        "Protocol fee wallet that receives 5% of settled pools.",
-        "Replace with your actual fee wallet before mainnet deployment."
+        "Protocol fee wallet (set via PROTOCOL_FEE_WALLET env var on client side)."
       ],
       "type": "pubkey",
-      "value": "Hb17qysxGiG6LPGXNqEYpZKfQH7Fc7XDGkVJvqx4zSLp"
+      "value": "11111111111111111111111111111111"
     },
     {
       "name": "USDC_DECIMALS",

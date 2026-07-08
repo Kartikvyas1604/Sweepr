@@ -20,6 +20,10 @@ class TxLINEError extends ApiError {
   }
 }
 
+function leaguesParam(): string {
+  return env.TXLINE_LEAGUES ? `?leagues=${encodeURIComponent(env.TXLINE_LEAGUES)}` : "";
+}
+
 async function fetchFromTxLINE<T>(
   path: string,
   schema: z.ZodSchema<T>,
@@ -30,13 +34,12 @@ async function fetchFromTxLINE<T>(
       "TXLINE_API_KEY not configured. Get one at https://txline.txodds.com (free tier available)",
     );
   }
-  const url = `${env.TXLINE_BASE_URL}${path}`;
+  const url = `${env.TXLINE_BASE_URL}${path}${leaguesParam()}`;
   const response = await fetch(url, {
     headers: {
       Authorization: `Bearer ${apiKey}`,
       Accept: "application/json",
     },
-    // FIX: Added AbortSignal.timeout to prevent hanging on slow TxLINE responses
     signal: AbortSignal.timeout(5000),
   });
 
