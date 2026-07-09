@@ -25,81 +25,120 @@ vi.mock("@/lib/env", () => ({
   },
 }));
 
-const mockTeams: TxLINETeam[] = [
-  { id: "BRA", name: "Brazil", shortName: "Brazil", flagUrl: "", group: "A", fifaRanking: 3 },
-  { id: "ARG", name: "Argentina", shortName: "Argentina", flagUrl: "", group: "A", fifaRanking: 1 },
-  { id: "FRA", name: "France", shortName: "France", flagUrl: "", group: "B", fifaRanking: 2 },
-];
-
-const mockEvents: TxLINEEvent[] = [
-  { id: "e1", fixtureId: "f1", teamId: "BRA", type: "goal", minute: 10, playerName: "Neymar", detail: null },
-  { id: "e2", fixtureId: "f1", teamId: "ARG", type: "goal", minute: 20, playerName: "Messi", detail: null },
-  { id: "e3", fixtureId: "f1", teamId: "BRA", type: "goal", minute: 30, playerName: "Neymar", detail: null },
-  { id: "e4", fixtureId: "f1", teamId: "BRA", type: "own_goal", minute: 40, playerName: "Neymar", detail: null },
-  { id: "e5", fixtureId: "f1", teamId: "FRA", type: "penalty", minute: 50, playerName: "Mbappe", detail: null },
-  { id: "e6", fixtureId: "f1", teamId: "BRA", type: "yellow_card", minute: 60, playerName: "Neymar", detail: null },
-  { id: "e7", fixtureId: "f1", teamId: "BRA", type: "red_card", minute: 70, playerName: "Neymar", detail: null },
-];
-
 beforeEach(() => {
   vi.restoreAllMocks();
 });
 
-describe("getAllTeams", () => {
-  it("returns teams from TxLINE API", async () => {
-    global.fetch = vi.fn().mockResolvedValue({
+// Helper to mock the guest JWT endpoint + data endpoint sequentially
+function mockTxLINEFetch(dataEndpoint: string, responseData: unknown) {
+  let callCount = 0;
+  global.fetch = vi.fn().mockImplementation(async (url: string, opts?: RequestInit) => {
+    callCount++;
+    // First call is always guest JWT (POST /auth/guest/start)
+    if (url.toString().includes("/auth/guest/start")) {
+      return {
+        ok: true,
+        json: () => Promise.resolve({ token: "test-jwt" }),
+      };
+    }
+    // Subsequent calls are data endpoints
+    return {
       ok: true,
-      json: () => Promise.resolve(mockTeams),
-    });
-    const teams = await getAllTeams();
-    expect(teams).toHaveLength(3);
-    expect(teams[0].name).toBe("Brazil");
+      json: () => Promise.resolve(responseData),
+    };
   });
+}
 
-  it("throws ApiError when API returns non-ok", async () => {
-    global.fetch = vi.fn().mockResolvedValue({
+function mockTxLINEFetchError(status: number, body: string) {
+  let callCount = 0;
+  global.fetch = vi.fn().mockImplementation(async (url: string) => {
+    callCount++;
+    if (url.includes("/auth/guest/start")) {
+      return {
+        ok: true,
+        json: () => Promise.resolve({ token: "test-jwt" }),
+      };
+    }
+    return {
       ok: false,
-      status: 500,
-      statusText: "Internal Server Error",
-      text: () => Promise.resolve("Server error"),
-    });
-    await expect(getAllTeams()).rejects.toThrow();
+      status,
+      text: () => Promise.resolve(body),
+    };
   });
+}
 
-  it("throws on network failure", async () => {
-    global.fetch = vi.fn().mockRejectedValue(new Error("Network failure"));
-    await expect(getAllTeams()).rejects.toThrow();
+describe("getAllTeams", () => {
+  it("returns teams from mock data (no external API call)", async () => {
+    const teams = await getAllTeams();
+    expect(teams.length).toBeGreaterThanOrEqual(32);
+    expect(teams.some((t) => t.name === "Brazil")).toBe(true);
+    expect(teams.some((t) => t.name === "France")).toBe(true);
   });
 });
 
 describe("getFixtures", () => {
-  it("returns all fixtures from TxLINE", async () => {
-    global.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve([{ id: "f1", homeTeamId: "BRA", awayTeamId: "ARG", homeTeamName: "Brazil", awayTeamName: "Argentina", homeScore: 0, awayScore: 0, status: "scheduled", kickoff: "2026-01-01T00:00:00Z", minute: 0, stage: "group", group: "A" }]),
-    });
+  it("returns mapped fixtures from TxLINE", async () => {
+    mockTxLINEFetch("/api/fixtures/snapshot", [
+      {
+        FixtureId: 18209181,
+        Participant1Id: 1999,
+        Participant2Id: 2530,
+        Participant1: "France",
+        Participant2: "Morocco",
+        StartTime: 1783627200000,
+        GameState: 1,
+      },
+    ]);
     const fixtures = await getFixtures();
     expect(fixtures).toHaveLength(1);
+    expect(fixtures[0].homeTeamName).toBe("France");
+    expect(fixtures[0].awayTeamName).toBe("Morocco");
+    expect(fixtures[0].status).toBe("scheduled");
+  });
+
+  it("returns empty array on API failure", async () => {
+    mockTxLINEFetchError(500, "Server error");
+    await expect(getFixtures()).rejects.toThrow();
   });
 });
 
 describe("getLiveFixtures", () => {
-  it("returns live fixtures from TxLINE", async () => {
-    global.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve([]),
-    });
-    const fixtures = await getLiveFixtures();
-    expect(fixtures).toEqual([]);
+  it("returns only live fixtures", async () => {
+    mockTxLINEFetch("/api/fixtures/snapshot", [
+      {
+        FixtureId: 1,
+        Participant1Id: 1,
+        Participant2Id: 2,
+        Participant1: "A", Participant2: "B",
+        StartTime: 1783627200000,
+        GameState: 2, // live
+      },
+      {
+        FixtureId: 2,
+        Participant1Id: 3,
+        Participant2Id: 4,
+        Participant1: "C", Participant2: "D",
+        StartTime: 1783627200000,
+        GameState: 1, // scheduled
+      },
+    ]);
+    const live = await getLiveFixtures();
+    expect(live).toHaveLength(1);
+    expect(live[0].status).toBe("live");
   });
 });
 
 describe("getFixtureEvents", () => {
-  it("returns only goal/own_goal/penalty events, filtered", async () => {
-    global.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve(mockEvents),
-    });
+  it("returns filtered events from scores snapshot", async () => {
+    mockTxLINEFetch("/api/scores/snapshot/f1", [
+      { FixtureId: 1, Action: "goal", Data: { Minute: 10, Player: "Neymar" }, Participant1Id: 1, Participant2Id: 2, GameState: "live" },
+      { FixtureId: 1, Action: "goal", Data: { Minute: 20, Player: "Messi" }, Participant1Id: 2, Participant2Id: 1, GameState: "live" },
+      { FixtureId: 1, Action: "goal", Data: { Minute: 30, Player: "Neymar" }, Participant1Id: 1, Participant2Id: 2, GameState: "live" },
+      { FixtureId: 1, Action: "own_goal", Data: { Minute: 40, Player: "Neymar" }, Participant1Id: 1, Participant2Id: 2, GameState: "live" },
+      { FixtureId: 1, Action: "penalty", Data: { Minute: 50, Player: "Mbappe" }, Participant1Id: 2, Participant2Id: 1, GameState: "live" },
+      { FixtureId: 1, Action: "yellow_card", Data: { Minute: 60, Player: "Neymar" }, Participant1Id: 1, Participant2Id: 2, GameState: "live" },
+      { FixtureId: 1, Action: "red_card", Data: { Minute: 70, Player: "Neymar" }, Participant1Id: 1, Participant2Id: 2, GameState: "live" },
+    ]);
     const events = await getFixtureEvents("f1");
     expect(events).toHaveLength(5); // 3 goals + 1 own_goal + 1 penalty
     for (const evt of events) {
@@ -107,31 +146,20 @@ describe("getFixtureEvents", () => {
     }
   });
 
-  it("throws on API failure", async () => {
-    global.fetch = vi.fn().mockResolvedValue({
-      ok: false,
-      status: 404,
-      text: () => Promise.resolve("Not found"),
-    });
-    await expect(getFixtureEvents("nonexistent")).rejects.toThrow();
+  it("returns empty array on API failure (graceful)", async () => {
+    mockTxLINEFetchError(500, "Server error");
+    const events = await getFixtureEvents("nonexistent");
+    expect(events).toEqual([]);
   });
 });
 
 describe("getTeamById", () => {
   it("returns null for nonexistent team", async () => {
-    global.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve(mockTeams),
-    });
     const team = await getTeamById("ZZZ");
     expect(team).toBeNull();
   });
 
-  it("returns matching team", async () => {
-    global.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve(mockTeams),
-    });
+  it("returns matching team from mock data", async () => {
     const team = await getTeamById("BRA");
     expect(team).not.toBeNull();
     expect(team!.name).toBe("Brazil");

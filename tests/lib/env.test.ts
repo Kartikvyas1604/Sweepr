@@ -35,14 +35,20 @@ function minimalValidEnv(): Record<string, string> {
 }
 
 describe("env validation", () => {
+  let importCount = 0;
+  async function importEnv(): Promise<any> {
+    importCount++;
+    return import(`@/lib/env?t=${importCount}`);
+  }
+
   it("parses successfully with minimum valid env vars", async () => {
     process.env = { ...OLD_ENV, ...minimalValidEnv() };
-    await expect(import("@/lib/env")).resolves.toBeDefined();
+    await expect(importEnv()).resolves.toBeDefined();
   });
 
   it("rejects invalid SOLANA_NETWORK", async () => {
     process.env = { ...OLD_ENV, ...minimalValidEnv(), SOLANA_NETWORK: "mainnet" };
-    await expect(import("@/lib/env")).rejects.toThrow();
+    await expect(importEnv()).rejects.toThrow();
   });
 
   it("accepts mainnet-beta as valid network", async () => {
@@ -52,7 +58,7 @@ describe("env validation", () => {
       SOLANA_NETWORK: "mainnet-beta",
       NEXT_PUBLIC_SOLANA_RPC: "https://api.mainnet-beta.solana.com",
     };
-    const { env } = await import("@/lib/env");
+    const { env } = await importEnv();
     expect(env.SOLANA_NETWORK).toBe("mainnet-beta");
   });
 
@@ -63,19 +69,19 @@ describe("env validation", () => {
       SOLANA_NETWORK: "testnet",
       NEXT_PUBLIC_SOLANA_RPC: "https://api.testnet.solana.com",
     };
-    const { env } = await import("@/lib/env");
+    const { env } = await importEnv();
     expect(env.SOLANA_NETWORK).toBe("testnet");
   });
 
   it("rejects missing TXLINE_API_KEY", async () => {
-    process.env = { ...OLD_ENV, ...minimalValidEnv() };
+    process.env = { ...OLD_ENV, ...minimalValidEnv(), NODE_ENV: "production" };
     delete (process.env as any).TXLINE_API_KEY;
-    await expect(import("@/lib/env")).rejects.toThrow();
+    await expect(importEnv()).rejects.toThrow();
   });
 
   it("rejects short JWT_SECRET (less than 32 chars)", async () => {
     process.env = { ...OLD_ENV, ...minimalValidEnv(), JWT_SECRET: "short" };
-    await expect(import("@/lib/env")).rejects.toThrow();
+    await expect(importEnv()).rejects.toThrow();
   });
 
   it("rejects invalid NEXT_PUBLIC_SUPABASE_URL", async () => {
@@ -84,20 +90,20 @@ describe("env validation", () => {
       ...minimalValidEnv(),
       NEXT_PUBLIC_SUPABASE_URL: "not-a-url",
     };
-    await expect(import("@/lib/env")).rejects.toThrow();
+    await expect(importEnv()).rejects.toThrow();
   });
 
   it("defaults SOLANA_NETWORK to mainnet-beta when not set", async () => {
     process.env = { ...OLD_ENV, ...minimalValidEnv() };
     delete (process.env as any).SOLANA_NETWORK;
-    const { env: parsed } = await import("@/lib/env");
+    const { env: parsed } = await importEnv();
     expect(parsed.SOLANA_NETWORK).toBe("mainnet-beta");
   });
 
   it("defaults JWT_EXPIRY to 86400 when not set", async () => {
     process.env = { ...OLD_ENV, ...minimalValidEnv() };
     delete (process.env as any).JWT_EXPIRY;
-    const { env: parsed } = await import("@/lib/env");
+    const { env: parsed } = await importEnv();
     expect(parsed.JWT_EXPIRY).toBe(86400);
   });
 
@@ -107,25 +113,25 @@ describe("env validation", () => {
       ...minimalValidEnv(),
       UPSTASH_REDIS_REST_URL: "",
     };
-    await expect(import("@/lib/env")).rejects.toThrow();
+    await expect(importEnv()).rejects.toThrow();
   });
 
   it("rejects missing ORACLE_PUBKEY", async () => {
     process.env = { ...OLD_ENV, ...minimalValidEnv() };
     delete (process.env as any).ORACLE_PUBKEY;
-    await expect(import("@/lib/env")).rejects.toThrow();
+    await expect(importEnv()).rejects.toThrow();
   });
 
   it("rejects missing PROTOCOL_FEE_WALLET", async () => {
     process.env = { ...OLD_ENV, ...minimalValidEnv() };
     delete (process.env as any).PROTOCOL_FEE_WALLET;
-    await expect(import("@/lib/env")).rejects.toThrow();
+    await expect(importEnv()).rejects.toThrow();
   });
 
   it("defaults NODE_ENV to production when not set", async () => {
     process.env = { ...OLD_ENV, ...minimalValidEnv() };
     delete (process.env as any).NODE_ENV;
-    const { env: parsed } = await import("@/lib/env");
+    const { env: parsed } = await importEnv();
     expect(parsed.NODE_ENV).toBe("production");
   });
 });

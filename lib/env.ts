@@ -19,7 +19,7 @@ const envSchema = z.object({
   ORACLE_PUBKEY: z.string().min(1),
   PROTOCOL_FEE_WALLET: z.string().min(1),
   NEXT_PUBLIC_SOLANA_RPC: z.string().url(),
-  SOLANA_NETWORK: z.enum(["mainnet-beta", "devnet", "testnet"]).default("devnet"),
+  SOLANA_NETWORK: z.enum(["mainnet-beta", "devnet", "testnet"]).default("mainnet-beta"),
   SWEEPR_PROGRAM_ID: z.string().min(1),
   INNGEST_EVENT_KEY: z.string().min(1),
   INNGEST_SIGNING_KEY: z.string().min(1),
