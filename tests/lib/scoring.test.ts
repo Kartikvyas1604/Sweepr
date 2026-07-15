@@ -60,7 +60,7 @@ describe("Goal scoring", () => {
     const members = [
       makeMember({ teamId: TEAM_A, memberId: "m1", wallet: "w1" }),
     ];
-    const results = processFixtureEvents(events, members, new Set());
+    const results = processFixtureEvents(events, members, new Set(), "all");
     expect(results).toHaveLength(1);
     expect(results[0].memberId).toBe("m1");
     expect(results[0].points).toBe(3);
@@ -72,7 +72,7 @@ describe("Goal scoring", () => {
     const members = [
       makeMember({ teamId: TEAM_A, memberId: "m1" }),
     ];
-    const results = processFixtureEvents(events, members, new Set());
+    const results = processFixtureEvents(events, members, new Set(), "all");
     expect(results).toHaveLength(1);
     expect(results[0].points).toBe(3);
     expect(results[0].eventType).toBe("penalty");
@@ -85,7 +85,7 @@ describe("Goal scoring", () => {
       makeMember({ teamId: TEAM_A, memberId: "m_scorer" }),
       makeMember({ teamId: TEAM_B, memberId: "m_beneficiary" }),
     ];
-    const results = processFixtureEvents(events, members, new Set(), fixtures);
+    const results = processFixtureEvents(events, members, new Set(), "all", fixtures);
     expect(results).toHaveLength(1);
     expect(results[0].memberId).toBe("m_beneficiary");
     expect(results[0].points).toBe(1);
@@ -94,14 +94,14 @@ describe("Goal scoring", () => {
   it("awards 0 points for red_card events", () => {
     const events = [makeEvent({ id: "evt_004", type: "red_card" })];
     const members = [makeMember({ teamId: TEAM_A, memberId: "m1" })];
-    const results = processFixtureEvents(events, members, new Set());
+    const results = processFixtureEvents(events, members, new Set(), "all");
     expect(results).toHaveLength(0);
   });
 
   it("awards 0 points for yellow_card events", () => {
     const events = [makeEvent({ id: "evt_005", type: "yellow_card" })];
     const members = [makeMember({ teamId: TEAM_A, memberId: "m1" })];
-    const results = processFixtureEvents(events, members, new Set());
+    const results = processFixtureEvents(events, members, new Set(), "all");
     expect(results).toHaveLength(0);
   });
 });
@@ -111,7 +111,7 @@ describe("Idempotency", () => {
     const events = [makeEvent({ id: "evt_001", type: "goal" })];
     const members = [makeMember({ teamId: TEAM_A, memberId: "m1" })];
     const processed = new Set(["evt_001"]);
-    const results = processFixtureEvents(events, members, processed);
+    const results = processFixtureEvents(events, members, processed, "all");
     expect(results).toHaveLength(0);
   });
 
@@ -119,7 +119,7 @@ describe("Idempotency", () => {
     const events = [makeEvent({ id: "evt_new", type: "goal" })];
     const members = [makeMember({ teamId: TEAM_A, memberId: "m1" })];
     const processed = new Set(["evt_001", "evt_002"]);
-    const results = processFixtureEvents(events, members, processed);
+    const results = processFixtureEvents(events, members, processed, "all");
     expect(results).toHaveLength(1);
   });
 
@@ -127,10 +127,10 @@ describe("Idempotency", () => {
     const events = [makeEvent({ id: "evt_001", type: "goal" })];
     const members = [makeMember({ teamId: TEAM_A, memberId: "m1" })];
     const processed = new Set<string>();
-    const pass1 = processFixtureEvents(events, members, processed);
+    const pass1 = processFixtureEvents(events, members, processed, "all");
     expect(pass1).toHaveLength(1);
     processed.add("evt_001");
-    const pass2 = processFixtureEvents(events, members, processed);
+    const pass2 = processFixtureEvents(events, members, processed, "all");
     expect(pass2).toHaveLength(0);
   });
 });
@@ -142,7 +142,7 @@ describe("Multi-pool isolation", () => {
       makeMember({ teamId: TEAM_A, memberId: "m_a", poolId: POOL_A }),
       makeMember({ teamId: TEAM_A, memberId: "m_b", poolId: POOL_B }),
     ];
-    const results = processFixtureEvents(events, members, new Set());
+    const results = processFixtureEvents(events, members, new Set(), "all");
     expect(results).toHaveLength(2);
     expect(results.map((r) => r.poolId).sort()).toEqual([POOL_A, POOL_B]);
   });
@@ -153,7 +153,7 @@ describe("Multi-pool isolation", () => {
       makeMember({ teamId: TEAM_A, memberId: "m1", poolId: POOL_A }),
       makeMember({ teamId: TEAM_A, memberId: "m2", poolId: POOL_B }),
     ];
-    const results = processFixtureEvents(events, members, new Set());
+    const results = processFixtureEvents(events, members, new Set(), "all");
     expect(results.map((r) => r.memberId).sort()).toEqual(["m1", "m2"]);
     expect(results[0].poolId).not.toBe(results[1].poolId);
   });
@@ -161,14 +161,14 @@ describe("Multi-pool isolation", () => {
 
 describe("Edge cases", () => {
   it("handles empty events array without throwing", () => {
-    const results = processFixtureEvents([], [makeMember()], new Set());
+    const results = processFixtureEvents([], [makeMember()], new Set(), "all");
     expect(results).toHaveLength(0);
   });
 
   it("handles fixture with no members assigned to either team", () => {
     const events = [makeEvent({ id: "evt_001", type: "goal", teamId: TEAM_C })];
     const members = [makeMember({ teamId: TEAM_A, memberId: "m1" })];
-    const results = processFixtureEvents(events, members, new Set());
+    const results = processFixtureEvents(events, members, new Set(), "all");
     expect(results).toHaveLength(0);
   });
 
@@ -176,7 +176,7 @@ describe("Edge cases", () => {
     const fixtures = [makeFixture({ id: "f1", homeTeamId: TEAM_A, awayTeamId: TEAM_B })];
     const events = [makeEvent({ id: "evt_001", type: "own_goal", teamId: TEAM_A })];
     const members = [makeMember({ teamId: TEAM_A, memberId: "m1" })]; // no one on TEAM_B
-    const results = processFixtureEvents(events, members, new Set(), fixtures);
+    const results = processFixtureEvents(events, members, new Set(), "all", fixtures);
     expect(results).toHaveLength(0);
   });
 
@@ -186,7 +186,7 @@ describe("Edge cases", () => {
       makeMember({ teamId: TEAM_A, memberId: "m1" }),
       makeMember({ teamId: TEAM_B, memberId: "m2" }),
     ];
-    const results = processFixtureEvents(events, members, new Set());
+    const results = processFixtureEvents(events, members, new Set(), "all");
     expect(results).toHaveLength(1);
     expect(results[0].memberId).toBe("m1");
   });
@@ -197,7 +197,7 @@ describe("Edge cases", () => {
       makeMember({ teamId: TEAM_A, memberId: "m_scorer" }),
       makeMember({ teamId: TEAM_B, memberId: "m_beneficiary" }),
     ];
-    const results = processFixtureEvents(events, members, new Set());
+    const results = processFixtureEvents(events, members, new Set(), "all");
     expect(results).toHaveLength(1);
     expect(results[0].memberId).toBe("m_beneficiary");
   });
@@ -205,8 +205,19 @@ describe("Edge cases", () => {
   it("carries playerName and minute through to results", () => {
     const events = [makeEvent({ id: "evt_001", type: "goal", minute: 42, playerName: "Messi" })];
     const members = [makeMember({ teamId: TEAM_A, memberId: "m1" })];
-    const results = processFixtureEvents(events, members, new Set());
+    const results = processFixtureEvents(events, members, new Set(), "all");
     expect(results[0].minute).toBe(42);
     expect(results[0].playerName).toBe("Messi");
+  });
+
+  it("filters events by allowedFixtureIds when scope is custom", () => {
+    const events = [
+      makeEvent({ id: "evt_001", type: "goal", teamId: TEAM_A, fixtureId: "f1" }),
+      makeEvent({ id: "evt_002", type: "goal", teamId: TEAM_A, fixtureId: "f2" }),
+    ];
+    const members = [makeMember({ teamId: TEAM_A, memberId: "m1" })];
+    const results = processFixtureEvents(events, members, new Set(), ["f1"]);
+    expect(results).toHaveLength(1);
+    expect(results[0].fixtureId).toBe("f1");
   });
 });

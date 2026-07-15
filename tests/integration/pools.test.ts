@@ -18,6 +18,7 @@ vi.mock("@/lib/txline", () => ({
   getAllTeams: vi.fn().mockResolvedValue([
     { id: "T1", name: "Team 1", shortName: "T1", flagUrl: "https://example.com/t1.png", group: "A", fifaRanking: 10 },
     { id: "T2", name: "Team 2", shortName: "T2", flagUrl: "https://example.com/t2.png", group: "B", fifaRanking: 20 },
+    { id: "T3", name: "Team 3", shortName: "T3", flagUrl: "https://example.com/t3.png", group: "C", fifaRanking: 30 },
   ]),
 }));
 
@@ -40,8 +41,25 @@ let idCounter = 0;
 
 function buildQb(tableName: string) {
   const filters: Array<(r: any) => boolean> = [];
+  let selectOpts: any = {};
   const qb: any = {
-    select: vi.fn(() => qb),
+    select: vi.fn((cols?: string, opts?: any) => {
+      selectOpts = opts || {};
+      if (selectOpts.head) {
+        return {
+          eq: vi.fn((field: string, value: any) => {
+            filters.push((r: any) => String(r[field]) === String(value));
+            return {
+              then: (onFulfilled: any) => {
+                const rows = (tables[tableName] ?? []).filter((r) => filters.every((f) => f(r)));
+                return Promise.resolve({ data: null, error: null, count: rows.length }).then(onFulfilled);
+              },
+            };
+          }),
+        };
+      }
+      return qb;
+    }),
     eq: vi.fn((field: string, value: any) => {
       filters.push((r: any) => String(r[field]) === String(value));
       return qb;
@@ -124,7 +142,7 @@ describe("pool CRUD flow", () => {
     const { POST: createPool } = await import("@/app/api/pools/route");
     const createRes = await createPool(new Request("http://localhost:3000/api/pools", {
       method: "POST",
-      body: JSON.stringify({ name: "World Cup Pool", entryFeeUsdc: 0, maxMembers: 5 }),
+      body: JSON.stringify({ name: "World Cup Pool", entryFeeUsdc: 0, maxMembers: 5, scope: "all" }),
     }));
     expect(createRes.status).toBe(200);
     const created = await createRes.json();
@@ -132,21 +150,11 @@ describe("pool CRUD flow", () => {
     expect(created.pool.status).toBe("waiting");
     const joinCode = created.pool.joinCode;
 
-    const { POST: assignTeam } = await import("@/app/api/pools/[joinCode]/assign-team/route");
-    const assignRes = await assignTeam(
-      new Request(`http://localhost:3000/api/pools/${joinCode}/assign-team`, { method: "POST" }),
-      { params: Promise.resolve({ joinCode }) },
-    );
-    expect(assignRes.status).toBe(200);
-    const assigned = await assignRes.json();
-    expect(assigned.tempToken).toBeTruthy();
-    expect(assigned.team).toBeTruthy();
-
     const { POST: joinPool } = await import("@/app/api/pools/[joinCode]/join/route");
     const joinRes = await joinPool(
       new Request(`http://localhost:3000/api/pools/${joinCode}/join`, {
         method: "POST",
-        body: JSON.stringify({ displayName: "TestUser", tempToken: assigned.tempToken }),
+        body: JSON.stringify({ displayName: "TestUser", teamId: "T1" }),
       }),
       { params: Promise.resolve({ joinCode }) },
     );
@@ -179,14 +187,14 @@ describe("pool CRUD flow", () => {
     const { POST: joinPool } = await import("@/app/api/pools/[joinCode]/join/route");
     const joinReq = new Request(`http://localhost:3000/api/pools/${pool.joinCode}/join`, {
       method: "POST",
-      body: JSON.stringify({ displayName: "User1" }),
+      body: JSON.stringify({ displayName: "User1", teamId: "T1" }),
     });
     const joinRes = await joinPool(joinReq, { params: Promise.resolve({ joinCode: pool.joinCode }) });
     expect(joinRes.status).toBe(200);
 
     const joinReq2 = new Request(`http://localhost:3000/api/pools/${pool.joinCode}/join`, {
       method: "POST",
-      body: JSON.stringify({ displayName: "User1" }),
+      body: JSON.stringify({ displayName: "User1", teamId: "T2" }),
     });
     const joinRes2 = await joinPool(joinReq2, { params: Promise.resolve({ joinCode: pool.joinCode }) });
     expect(joinRes2.status).toBe(409);
@@ -215,7 +223,7 @@ describe("pool CRUD flow", () => {
     const { POST: joinPool } = await import("@/app/api/pools/[joinCode]/join/route");
     const joinReq = new Request(`http://localhost:3000/api/pools/${pool.joinCode}/join`, {
       method: "POST",
-      body: JSON.stringify({ displayName: "User3" }),
+      body: JSON.stringify({ displayName: "User3", teamId: "T3" }),
     });
     const joinRes = await joinPool(joinReq, { params: Promise.resolve({ joinCode: pool.joinCode }) });
     expect(joinRes.status).toBe(409);

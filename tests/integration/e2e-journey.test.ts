@@ -187,29 +187,18 @@ describe("E2E: full journey", () => {
     const { POST: createPool } = await import("@/app/api/pools/route");
     const createRes = await createPool(new Request("http://localhost:3000/api/pools", {
       method: "POST",
-      body: JSON.stringify({ name: "World Cup 2026", entryFeeUsdc: 0, maxMembers: 10 }),
+      body: JSON.stringify({ name: "World Cup 2026", entryFeeUsdc: 0, maxMembers: 10, scope: "all" }),
     }));
     expect(createRes.status).toBe(200);
     const { pool } = await createRes.json();
     expect(pool.status).toBe("waiting");
 
-    // ====== 2. ASSIGN TEAM ======
-    const { POST: assignTeam } = await import("@/app/api/pools/[joinCode]/assign-team/route");
-    const assignRes = await assignTeam(
-      new Request(`http://localhost:3000/api/pools/${pool.joinCode}/assign-team`, { method: "POST" }),
-      { params: Promise.resolve({ joinCode: pool.joinCode }) },
-    );
-    expect(assignRes.status).toBe(200);
-    const assignData = await assignRes.json();
-    expect(assignData.tempToken).toBeTruthy();
-    expect(assignData.team).toBeTruthy();
-
-    // ====== 3. JOIN POOL ======
+    // ====== 2. JOIN POOL (pick team) ======
     const { POST: joinPool } = await import("@/app/api/pools/[joinCode]/join/route");
     const joinRes = await joinPool(
       new Request(`http://localhost:3000/api/pools/${pool.joinCode}/join`, {
         method: "POST",
-        body: JSON.stringify({ displayName: "CryptoFan42", tempToken: assignData.tempToken }),
+        body: JSON.stringify({ displayName: "CryptoFan42", teamId: "T1" }),
       }),
       { params: Promise.resolve({ joinCode: pool.joinCode }) },
     );
@@ -219,7 +208,7 @@ describe("E2E: full journey", () => {
     expect(joinData.member.displayName).toBe("CryptoFan42");
     expect(joinData.member.score).toBe(0);
 
-    // ====== 4. CHECK LEADERBOARD ======
+    // ====== 3. CHECK LEADERBOARD ======
     const { GET: getLeaderboard } = await import("@/app/api/pools/[joinCode]/leaderboard/route");
     const lbRes = await getLeaderboard(
       new Request(`http://localhost:3000/api/pools/${pool.joinCode}/leaderboard`),
@@ -290,7 +279,7 @@ describe("E2E: full journey", () => {
 
     // The pool.id is set by crypto.randomUUID() — it's a real UUID, not a mock rec_*
     expect(pool.id).toBeTruthy();
-    expect(mockCallInitializePool).toHaveBeenCalledWith(expect.any(String), 5, 20);
+    expect(mockCallInitializePool).toHaveBeenCalledWith(expect.any(String), 5, 20, "all");
     expect(pool.status).toBe("waiting");
   });
 

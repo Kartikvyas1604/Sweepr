@@ -2,8 +2,7 @@ import { z } from "zod";
 import { withRateLimit } from "@/lib/ratelimit";
 import { handleRouteError, ApiError } from "@/lib/errors";
 import { supabaseAdmin } from "@/lib/supabase";
-import { txline } from "@/lib/txline";
-import { getAllTeams } from "@/lib/txline";
+import { getAllTeams, getFixtureById } from "@/lib/txline";
 import { logger } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
@@ -50,7 +49,7 @@ export async function POST(
     if (fixtureIds && fixtureIds.length > 0) {
       const fixtures = await Promise.all(
         fixtureIds.map(async (fixtureId) => {
-          const fixture = await txline.getFixtureById(fixtureId);
+          const fixture = await getFixtureById(fixtureId);
           return {
             pool_id: poolId,
             fixture_id: fixture.id,

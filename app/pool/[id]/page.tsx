@@ -9,11 +9,10 @@ import { LiveIndicator } from "@/components/ui/live-indicator";
 import { EscrowStatus } from "@/components/ui/escrow-status";
 import { LeaderboardRow, LeaderboardHeader } from "@/components/ui/leaderboard-row";
 import { Button } from "@/components/ui/button";
-import { GoalOverlay } from "@/components/ui/goal-overlay";
 import { TopNav } from "@/components/ui/top-nav";
 import { ShareButton } from "@/components/ui/share-button";
 import { api } from "@/lib/api-client";
-import { Trophy, Goal, AlertCircle, Globe, Coins, Sparkles, EyeOff } from "lucide-react";
+import { Trophy, AlertCircle, Globe, Coins, Sparkles, EyeOff, Swords } from "lucide-react";
 
 function poolStatusLabel(status: string): string {
   switch (status) {
@@ -31,6 +30,73 @@ function poolIsOpen(status: string): boolean {
 
 function poolCanJoin(status: string): boolean {
   return status === "waiting";
+}
+
+function BattleCard({ participants }: { participants: any[] }) {
+  const p1 = participants[0];
+  const p2 = participants[1];
+  if (!p1 || !p2) return null;
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex items-center justify-center gap-2">
+        <Swords className="h-4 w-4 text-primary" />
+        <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground/50">
+          Head to Head
+        </span>
+      </div>
+
+      <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-4">
+        <div className="flex flex-col items-center gap-2">
+          <div className="flex h-16 w-16 items-center justify-center rounded-full bg-money/10">
+            {p1.teamFlagUrl ? (
+              <img src={p1.teamFlagUrl} alt="" className="h-12 w-16 rounded-sm object-cover" />
+            ) : (
+              <span className="text-2xl">🏆</span>
+            )}
+          </div>
+          <div className="text-center">
+            <p className="font-display text-lg uppercase tracking-wider text-foreground">
+              {p1.teamName}
+            </p>
+            <p className="font-body text-xs text-muted-foreground">{p1.displayName}</p>
+          </div>
+          <div className="flex flex-col items-center gap-1">
+            <span className="font-mono text-3xl font-bold text-money">{p1.score}</span>
+            <span className="font-mono text-[9px] uppercase tracking-widest text-muted-foreground/40">
+              POINTS
+            </span>
+          </div>
+        </div>
+
+        <div className="flex flex-col items-center gap-1">
+          <span className="font-display text-lg text-muted-foreground/30">VS</span>
+        </div>
+
+        <div className="flex flex-col items-center gap-2">
+          <div className="flex h-16 w-16 items-center justify-center rounded-full bg-money/10">
+            {p2.teamFlagUrl ? (
+              <img src={p2.teamFlagUrl} alt="" className="h-12 w-16 rounded-sm object-cover" />
+            ) : (
+              <span className="text-2xl">🏆</span>
+            )}
+          </div>
+          <div className="text-center">
+            <p className="font-display text-lg uppercase tracking-wider text-foreground">
+              {p2.teamName}
+            </p>
+            <p className="font-body text-xs text-muted-foreground">{p2.displayName}</p>
+          </div>
+          <div className="flex flex-col items-center gap-1">
+            <span className="font-mono text-3xl font-bold text-money">{p2.score}</span>
+            <span className="font-mono text-[9px] uppercase tracking-widest text-muted-foreground/40">
+              POINTS
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export default function PoolPage() {
@@ -85,6 +151,8 @@ export default function PoolPage() {
 
   const { pool, memberCount, spotsRemaining } = poolData;
   const participants = leaderboard;
+  const isSingleScope = pool.scope === "single";
+  const isCustomScope = pool.scope === "custom";
 
   return (
     <div className="relative flex min-h-dvh flex-col">
@@ -118,6 +186,12 @@ export default function PoolPage() {
                     <><Globe className="h-2.5 w-2.5" /> Public</>
                   )}
                 </Badge>
+                {pool.scope && pool.scope !== "all" && (
+                  <Badge variant="outline" size="sm">
+                    <Swords className="h-2.5 w-2.5" />
+                    {pool.scope === "single" ? "1 Match" : "Custom"}
+                  </Badge>
+                )}
               </div>
             </div>
           </div>
@@ -182,12 +256,12 @@ export default function PoolPage() {
                 <div className="flex items-center gap-2">
                   <Trophy className="h-4 w-4 text-money" />
                   <span className="font-display text-sm uppercase tracking-wider text-foreground">
-                    Leaderboard
+                    {isSingleScope ? "Battle" : "Leaderboard"}
                   </span>
                 </div>
                 <LiveIndicator label={poolStatusLabel(pool.status)} />
               </div>
-              <LeaderboardHeader />
+              {!isSingleScope && <LeaderboardHeader />}
             </CardHeader>
             <CardContent className="p-0">
               {participants.length === 0 ? (
@@ -198,6 +272,10 @@ export default function PoolPage() {
                       Join this pool
                     </Button>
                   )}
+                </div>
+              ) : isSingleScope ? (
+                <div className="px-5 py-6">
+                  <BattleCard participants={participants} />
                 </div>
               ) : (
                 participants.map((participant: any) => (

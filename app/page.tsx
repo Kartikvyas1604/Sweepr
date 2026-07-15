@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
@@ -8,6 +8,8 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { TopNav } from "@/components/ui/top-nav";
 import { WalletButton } from "@/components/ui/wallet-button";
+import { ScopePicker } from "@/components/ui/scope-picker";
+import { FixturePicker } from "@/components/ui/fixture-picker";
 import { useWallet } from "@/components/wallet-provider";
 import { api, ApiClientError } from "@/lib/api-client";
 import {
@@ -33,7 +35,7 @@ const STAGGER = {
 
 const STEPS = [
   { icon: Users, label: "Create Pool", desc: "Set the buy-in and name your pool" },
-  { icon: Share2, label: "Share Link", desc: "Friends join & get random teams" },
+  { icon: Share2, label: "Share Link", desc: "Friends join & pick their teams" },
   { icon: Trophy, label: "Auto Settle", desc: "Smart contract pays the winner" },
 ];
 
@@ -44,7 +46,21 @@ export default function Home() {
   const [entryFee, setEntryFee] = useState("");
   const [isPrivate, setIsPrivate] = useState(false);
   const [passphrase, setPassphrase] = useState("");
+  const [scope, setScope] = useState<"all" | "single" | "custom">("all");
+  const [selectedFixtureIds, setSelectedFixtureIds] = useState<string[]>([]);
+  const [fixtures, setFixtures] = useState<any[]>([]);
+  const [loadingFixtures, setLoadingFixtures] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (scope !== "all") {
+      setLoadingFixtures(true);
+      api.fixtures.options()
+        .then((data) => setFixtures(data.all))
+        .catch(() => setError("Failed to load fixtures"))
+        .finally(() => setLoadingFixtures(false));
+    }
+  }, [scope]);
 
   function generatePassphrase(): string {
     const words = [
@@ -64,11 +80,28 @@ export default function Home() {
     const fee = entryFee === "" ? 0 : parseFloat(entryFee);
     if (!poolName) return;
     if (isNaN(fee) || fee < 0) return;
+
+    if (scope === "single" && selectedFixtureIds.length !== 1) {
+      setError("Select exactly one match for a head-to-head pool");
+      return;
+    }
+    if (scope === "custom" && selectedFixtureIds.length === 0) {
+      setError("Select at least one match for a custom pool");
+      return;
+    }
+
     setError(null);
     try {
       await ensureAuth();
       const finalPassphrase = isPrivate ? (passphrase || generatePassphrase()) : undefined;
-      const result = await api.pools.create(poolName, fee, undefined, isPrivate, finalPassphrase);
+      const result = await api.pools.create(
+        poolName,
+        fee,
+        scope,
+        scope === "all" ? undefined : selectedFixtureIds,
+        isPrivate,
+        finalPassphrase,
+      );
       if (finalPassphrase && !passphrase) {
         alert(`Your pool passphrase is: ${finalPassphrase}\n\nShare it with your friends so they can join.`);
       }
@@ -81,6 +114,9 @@ export default function Home() {
       }
     }
   }
+
+  const canCreate = connected && poolName && (entryFee === "" || (parseFloat(entryFee) >= 0 && !isNaN(parseFloat(entryFee))))
+    && (scope === "all" || (scope === "single" && selectedFixtureIds.length === 1) || (scope === "custom" && selectedFixtureIds.length > 0));
 
   return (
     <div className="relative flex min-h-dvh flex-col">
@@ -117,7 +153,7 @@ export default function Home() {
             <motion.div variants={STAGGER} custom={0}>
               <div className="inline-flex items-center gap-3 rounded-full border bg-muted/50 px-4 py-1.5 font-mono text-[10px] uppercase tracking-[0.25em] text-muted-foreground">
                 <Sparkles className="h-3 w-3 text-primary" />
-                on-chain • trustless • instant
+                on-chain · trustless · instant
               </div>
             </motion.div>
 
@@ -171,16 +207,39 @@ export default function Home() {
                   value={poolName}
                   onChange={(e) => setPoolName(e.target.value)}
                 />
-                  <Input
-                    id="entry-fee"
-                    label="Entry Fee (SOL)"
-                    placeholder="e.g. 10"
-                    type="number"
-                    min="0.01"
-                    step="0.01"
-                    value={entryFee}
-                    onChange={(e) => setEntryFee(e.target.value)}
-                  />
+                <Input
+                  id="entry-fee"
+                  label="Entry Fee (SOL)"
+                  placeholder="e.g. 10"
+                  type="number"
+                  min="0.01"
+                  step="0.01"
+                  value={entryFee}
+                  onChange={(e) => setEntryFee(e.target.value)}
+                />
+
+                <ScopePicker value={scope} onChange={setScope} />
+
+                {scope !== "all" && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: "auto" }}
+                    exit={{ opacity: 0, height: 0 }}
+                  >
+                    {loadingFixtures ? (
+                      <div className="flex items-center justify-center py-8">
+                        <p className="font-mono text-[11px] text-muted-foreground/40">Loading fixtures...</p>
+                      </div>
+                    ) : (
+                      <FixturePicker
+                        fixtures={fixtures}
+                        selectedIds={selectedFixtureIds}
+                        onChange={setSelectedFixtureIds}
+                        mode={scope === "single" ? "single" : "multi"}
+                      />
+                    )}
+                  </motion.div>
+                )}
 
                 {/* Public / Private toggle */}
                 <div className="flex gap-2">
@@ -236,7 +295,7 @@ export default function Home() {
                 <Button
                   size="lg"
                   className="w-full"
-                  disabled={!connected || !poolName || (entryFee !== "" && parseFloat(entryFee) < 0)}
+                  disabled={!canCreate}
                   onClick={handleCreate}
                 >
                   {connected ? "Create Pool" : "Connect Wallet to Create"}

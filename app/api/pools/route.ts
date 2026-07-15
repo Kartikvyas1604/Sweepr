@@ -127,14 +127,14 @@ export async function POST(request: Request) {
       return handleRouteError(parsed.error);
     }
 
-    const { name: rawName, entryFeeUsdc, isPrivate, passphrase, scope, fixtureIds } = parsed.data;
+    const { name: rawName, entryFeeUsdc, maxMembers, isPrivate, passphrase, scope, fixtureIds } = parsed.data;
     const name = sanitizePoolName(rawName);
 
     if (entryFeeUsdc > 0 && entryFeeUsdc < 0.0001) {
       throw new ApiError(400, "INVALID_FEE", "Entry fee must be 0 or at least 0.0001 SOL");
     }
 
-    let finalMaxMembers = 32;
+    let finalMaxMembers = maxMembers;
     let poolFixturesToInsert: { fixture_id: string; home_team_id: string; home_team_name: string; home_flag_url: string | null; away_team_id: string; away_team_name: string; away_flag_url: string | null; kickoff: string; stage: string; group: string | null }[] = [];
 
     if (scope === "single") {

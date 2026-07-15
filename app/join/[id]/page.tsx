@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { TeamDraw } from "@/components/ui/team-draw";
+import { TeamPicker } from "@/components/ui/team-picker";
 import { LiveIndicator } from "@/components/ui/live-indicator";
 import { useWallet } from "@/components/wallet-provider";
 import { api } from "@/lib/api-client";
@@ -16,10 +16,10 @@ import { buildJoinPoolTx, getUsdcMintForNetwork, deriveMemberPdaClient } from "@
 import { TopNav } from "@/components/ui/top-nav";
 import {
   Users, DollarSign, Check, Globe, AlertCircle,
-  Wallet, Loader2, EyeOff,
+  Wallet, Loader2, EyeOff, Swords,
 } from "lucide-react";
 
-type Step = "connect" | "name" | "signing" | "draw" | "confirm";
+type Step = "connect" | "name" | "signing" | "confirm";
 
 export default function JoinPage() {
   const params = useParams();
@@ -28,27 +28,30 @@ export default function JoinPage() {
   const [pool, setPool] = useState<any>(null);
   const [memberCount, setMemberCount] = useState(0);
   const [spotsRemaining, setSpotsRemaining] = useState(0);
+  const [teams, setTeams] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [step, setStep] = useState<Step>("connect");
   const [name, setName] = useState("");
   const [passphrase, setPassphrase] = useState("");
+  const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
   const [joining, setJoining] = useState(false);
   const [sigStatus, setSigStatus] = useState<string | null>(null);
-  const [drawTeams, setDrawTeams] = useState<any[]>([]);
-  const [assignedTeam, setAssignedTeam] = useState<any>(null);
+  const [joinedTeam, setJoinedTeam] = useState<any>(null);
 
   useEffect(() => {
     const joinCode = params.id as string;
-    api.pools.get(joinCode)
-      .then((data) => {
-        setPool(data.pool);
-        setMemberCount(data.memberCount ?? 0);
-        setSpotsRemaining(data.spotsRemaining ?? 0);
+    Promise.all([
+      api.pools.get(joinCode),
+      api.pools.teams(joinCode).catch(() => null),
+    ])
+      .then(([poolRes, teamsRes]) => {
+        setPool(poolRes.pool);
+        setMemberCount(poolRes.memberCount ?? 0);
+        setSpotsRemaining(poolRes.spotsRemaining ?? 0);
+        if (teamsRes) setTeams(teamsRes.teams);
       })
-      .catch(() => {
-        setError("Pool not found");
-      })
+      .catch(() => setError("Pool not found"))
       .finally(() => setLoading(false));
   }, [params.id]);
 
@@ -59,8 +62,9 @@ export default function JoinPage() {
   }, [connected, step]);
 
   async function handleJoin() {
-    if (!pool || !name.trim() || !address) return;
+    if (!pool || !name.trim() || !address || !selectedTeamId) return;
     setJoining(true);
+    setError(null);
 
     try {
       const joinCode = params.id as string;
@@ -68,20 +72,11 @@ export default function JoinPage() {
 
       if (isPaid) {
         setStep("signing");
-        console.log("[join] ensureAuth...");
         setSigStatus("Authenticating...");
         await ensureAuth();
-        console.log("[join] ensureAuth done");
 
-        console.log("[join] assignTeam...");
-        setSigStatus("Assigning your team...");
-        const assignRes = await api.pools.assignTeam(joinCode);
-        console.log("[join] assignTeam done", assignRes);
-
-        console.log("[join] getProvider...");
         setSigStatus("Building transaction...");
         const provider = await getProvider();
-        console.log("[join] provider publicKey:", provider?.publicKey?.toBase58?.() ?? provider?.publicKey);
 
         const rpc = process.env.NEXT_PUBLIC_SOLANA_RPC;
         if (!rpc) throw new Error("RPC URL not configured");
@@ -95,50 +90,41 @@ export default function JoinPage() {
         const entryFeeSol = Number(pool.entryFeeUsdc);
 
         const memberPda = deriveMemberPdaClient(pool.id, provider.publicKey, programId);
-        console.log("[join] Checking if member account already exists on-chain...", memberPda.toString());
         setSigStatus("Checking membership status...");
         const memberAccount = await conn.getAccountInfo(memberPda);
 
         let sig = null;
         if (memberAccount) {
-          console.log("[join] Member account already exists on-chain. Retrieving past transaction signature...");
           setSigStatus("Retrieving previous join details...");
           const signatures = await conn.getSignaturesForAddress(memberPda, { limit: 1 });
           if (signatures && signatures.length > 0) {
             sig = signatures[0].signature;
-            console.log("[join] Found existing transaction signature:", sig);
-          } else {
-            console.warn("[join] Member account exists but signatures list is empty.");
           }
         }
 
         if (!sig) {
-          console.log("[join] buildJoinPoolTx...", { poolId: pool.id, entryFeeSol });
+          const teamIdBytes = Array.from(new TextEncoder().encode(selectedTeamId)).slice(0, 8);
+          while (teamIdBytes.length < 8) teamIdBytes.push(0);
+
           const { tx } = await buildJoinPoolTx(
             pool.id,
             provider.publicKey,
-            assignRes.teamIdBytes,
+            teamIdBytes,
             programId,
             usdcMint,
             conn,
             entryFeeSol,
           );
-          console.log("[join] tx built");
 
-          console.log("[join] signTransaction...");
           setSigStatus("Sign in your wallet...");
           const signedResult = await provider.signTransaction(tx);
           const signedTx = signedResult.transaction ?? signedResult;
-          console.log("[join] signed");
-
-          console.log("[join] sendRawTransaction...");
           setSigStatus("Sending to Solana...");
           sig = await conn.sendRawTransaction(signedTx.serialize());
           setSigStatus("Confirming transaction...");
 
-          // Polling confirmation strategy to avoid buggy WebSocket connections on devnet
           let confirmed = false;
-          const maxRetries = 45; // 45 seconds max
+          const maxRetries = 45;
           for (let i = 0; i < maxRetries; i++) {
             const status = await conn.getSignatureStatus(sig);
             const val = status?.value;
@@ -152,31 +138,46 @@ export default function JoinPage() {
             await new Promise((resolve) => setTimeout(resolve, 1000));
           }
           if (!confirmed) {
-            // Final fallback check: if the member PDA exists now, it got confirmed on-chain
             const checkPdaExists = await conn.getAccountInfo(memberPda);
-            if (checkPdaExists) {
-              console.log("Confirmed via account check");
-            } else {
+            if (!checkPdaExists) {
               throw new Error("Transaction confirmation timed out. Please check your wallet history.");
             }
           }
         }
 
         setSigStatus("Verifying & finalizing...");
-        const result = await api.pools.join(joinCode, name.trim(), sig, assignRes.tempToken, passphrase || undefined);
+        const result = await api.pools.join(joinCode, name.trim(), selectedTeamId, sig, passphrase || undefined);
 
-        setAssignedTeam(result.assignedTeam);
+        setJoinedTeam({
+          teamId: selectedTeamId,
+          teamName: teams.find((t) => t.teamId === selectedTeamId)?.teamName ?? selectedTeamId,
+          flagUrl: teams.find((t) => t.teamId === selectedTeamId)?.flagUrl ?? null,
+        });
         setStep("confirm");
       } else {
-        // Free pool — ensure auth first
         await ensureAuth();
-        const result = await api.pools.join(joinCode, name.trim(), undefined, undefined, passphrase || undefined);
-        setAssignedTeam(result.assignedTeam);
+        const result = await api.pools.join(joinCode, name.trim(), selectedTeamId, undefined, passphrase || undefined);
+
+        setJoinedTeam({
+          teamId: selectedTeamId,
+          teamName: teams.find((t) => t.teamId === selectedTeamId)?.teamName ?? selectedTeamId,
+          flagUrl: teams.find((t) => t.teamId === selectedTeamId)?.flagUrl ?? null,
+        });
         setStep("confirm");
       }
     } catch (e: any) {
-      setError(e.message || "Failed to join pool");
-      setStep("name");
+      if (e.code === "TEAM_TAKEN") {
+        setError(e.message);
+        setStep("name");
+        setSelectedTeamId(null);
+        const joinCode = params.id as string;
+        api.pools.teams(joinCode)
+          .then((data) => setTeams(data.teams))
+          .catch(() => {});
+      } else {
+        setError(e.message || "Failed to join pool");
+        setStep("name");
+      }
     } finally {
       setJoining(false);
       setSigStatus(null);
@@ -275,6 +276,12 @@ export default function JoinPage() {
                           ) : (
                             <><Globe className="h-3 w-3 text-muted-foreground" /> Public</>
                           )}
+                          {pool?.scope && pool.scope !== "all" && (
+                            <Badge variant="outline" size="sm" className="ml-1">
+                              <Swords className="h-2.5 w-2.5" />
+                              {pool.scope === "single" ? "1 Match" : "Custom"}
+                            </Badge>
+                          )}
                         </p>
                       </div>
                       <LiveIndicator label="OPEN" />
@@ -310,13 +317,6 @@ export default function JoinPage() {
                       </div>
                     </div>
 
-                    {error && (
-                      <div className="flex items-center gap-2 rounded-md bg-primary/10 px-3 py-2">
-                        <AlertCircle className="h-3.5 w-3.5 shrink-0 text-primary" />
-                        <p className="font-mono text-[11px] text-primary">{error}</p>
-                      </div>
-                    )}
-
                     <Input
                       id="name"
                       label="Your Name"
@@ -335,10 +335,24 @@ export default function JoinPage() {
                       />
                     )}
 
+                    <TeamPicker
+                      teams={teams}
+                      selectedId={selectedTeamId}
+                      onChange={setSelectedTeamId}
+                      disabled={joining}
+                    />
+
+                    {error && (
+                      <div className="flex items-center gap-2 rounded-md bg-primary/10 px-3 py-2">
+                        <AlertCircle className="h-3.5 w-3.5 shrink-0 text-primary" />
+                        <p className="font-mono text-[11px] text-primary">{error}</p>
+                      </div>
+                    )}
+
                     <Button
                       size="lg"
                       className="w-full"
-                      disabled={!name.trim() || joining}
+                      disabled={!name.trim() || !selectedTeamId || joining}
                       onClick={handleJoin}
                     >
                       {joining ? (
@@ -417,37 +431,7 @@ export default function JoinPage() {
               </motion.div>
             )}
 
-            {step === "draw" && assignedTeam && (
-              <motion.div
-                key="draw"
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.95 }}
-              >
-                <Card>
-                  <CardHeader>
-                    <div className="flex w-full items-center justify-between">
-                      <p className="font-display text-sm uppercase tracking-wider text-foreground">
-                        Your Draw
-                      </p>
-                      <Badge variant="outline" size="sm">
-                        Random
-                      </Badge>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="py-8">
-                    <TeamDraw
-                      participantName={name}
-                      drawTeams={drawTeams}
-                      assignedTeam={assignedTeam}
-                      onRevealComplete={() => setStep("confirm")}
-                    />
-                  </CardContent>
-                </Card>
-              </motion.div>
-            )}
-
-            {step === "confirm" && assignedTeam && (
+            {step === "confirm" && joinedTeam && (
               <motion.div
                 key="confirm"
                 initial={{ opacity: 0, scale: 0.95 }}
@@ -470,24 +454,19 @@ export default function JoinPage() {
                       animate={{ scale: 1 }}
                       transition={{ type: "spring", stiffness: 200, damping: 12 }}
                     >
-                      {assignedTeam.flagUrl ? (
-                        <img src={assignedTeam.flagUrl} alt="" className="h-16 w-24 rounded-sm object-cover" />
+                      {joinedTeam.flagUrl ? (
+                        <img src={joinedTeam.flagUrl} alt="" className="h-16 w-24 rounded-sm object-cover" />
                       ) : (
                         <span className="text-4xl">🏆</span>
                       )}
                     </motion.div>
                     <div className="text-center">
                       <p className="font-display text-2xl uppercase tracking-wider text-money">
-                        {assignedTeam.name}
+                        {joinedTeam.teamName}
                       </p>
                       <p className="mt-1 font-body text-sm text-muted-foreground">
-                        You&apos;re cheering for {assignedTeam.name} this Cup.
+                        You&apos;re cheering for {joinedTeam.teamName} this Cup.
                       </p>
-                      {assignedTeam.group && (
-                        <p className="mt-0.5 font-mono text-[10px] uppercase tracking-widest text-muted-foreground/40">
-                          Group {assignedTeam.group}
-                        </p>
-                      )}
                     </div>
                     <Button
                       size="lg"

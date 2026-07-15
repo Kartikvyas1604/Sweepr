@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { generateJoinCode, assignTeam, computeLeaderboard } from "@/lib/pools";
+import { generateJoinCode, computeLeaderboard } from "@/lib/pools";
 import { ApiError } from "@/lib/errors";
 
 const mockTxlineTeams = vi.hoisted(() => [
@@ -83,59 +83,6 @@ describe("generateJoinCode", () => {
   it("throws ApiError if collision limit exceeded", async () => {
     (redis.exists as any).mockResolvedValue(1);
     await expect(generateJoinCode()).rejects.toThrow(ApiError);
-  });
-});
-
-describe("assignTeam", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  it("returns a team from the available pool", async () => {
-    const { supabaseAdmin } = await import("@/lib/supabase");
-    supabaseAdmin.from = vi.fn(() => {
-      const qb: any = { select: vi.fn(() => qb), eq: vi.fn(() => qb), order: vi.fn(() => qb), single: vi.fn(() => qb) };
-      qb._mockResult = { data: [], error: null };
-      qb.then = (onFulfilled: any) => Promise.resolve(qb._mockResult).then(onFulfilled);
-      return qb;
-    }) as any;
-
-    const team = await assignTeam("pool-1");
-    expect(team).toBeDefined();
-    expect(team.id).toBeTruthy();
-    expect(mockTxlineTeams.map((t: any) => t.id)).toContain(team.id);
-  });
-
-  it("never assigns a team already in pool_members", async () => {
-    const { supabaseAdmin } = await import("@/lib/supabase");
-    supabaseAdmin.from = vi.fn(() => {
-      const qb: any = { select: vi.fn(() => qb), eq: vi.fn(() => qb), order: vi.fn(() => qb), single: vi.fn(() => qb) };
-      qb._mockResult = { data: [{ team_id: "BRA" }, { team_id: "ARG" }], error: null };
-      qb.then = (onFulfilled: any) => Promise.resolve(qb._mockResult).then(onFulfilled);
-      return qb;
-    }) as any;
-
-    const team = await assignTeam("pool-1");
-    expect(["FRA", "ENG"]).toContain(team.id);
-  });
-
-  it("throws ApiError 409 NO_TEAMS_LEFT when all teams assigned", async () => {
-    const { supabaseAdmin } = await import("@/lib/supabase");
-    supabaseAdmin.from = vi.fn(() => {
-      const qb: any = { select: vi.fn(() => qb), eq: vi.fn(() => qb), order: vi.fn(() => qb), single: vi.fn(() => qb) };
-      qb._mockResult = {
-        data: mockTxlineTeams.map((t: any) => ({ team_id: t.id })),
-        error: null,
-      };
-      qb.then = (onFulfilled: any) => Promise.resolve(qb._mockResult).then(onFulfilled);
-      return qb;
-    }) as any;
-
-    await expect(assignTeam("pool-1")).rejects.toThrow(ApiError);
-    await expect(assignTeam("pool-1")).rejects.toMatchObject({
-      status: 409,
-      code: "NO_TEAMS_LEFT",
-    });
   });
 });
 

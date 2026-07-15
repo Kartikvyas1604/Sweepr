@@ -70,8 +70,7 @@ export async function GET(request: Request) {
     const allTeams = await getAllTeams();
     const fixturesOptions = buildFixtureOptions(allTeams);
 
-    const groupedMap = new Map<string, (typeof responseSchema.shape.grouped)[0][]>();
-    const stageOrder = ["Group Stage", "Round of 16", "Quarterfinals", "Semifinals", "Final"];
+    const groupedMap = new Map<string, { id: string; label: string; homeTeam: { id: string; name: string; flagUrl?: string }; awayTeam: { id: string; name: string; flagUrl?: string }; kickoff: string; stage: string; group: string | null; status: "scheduled" | "live" | "finished" }[]>();    const stageOrder = ["Group Stage", "Round of 16", "Quarterfinals", "Semifinals", "Final"];
     
     for (const opt of fixturesOptions) {
       const stageMap = stageOrder.find((s) => opt.stage.toLowerCase().includes(s.toLowerCase().replace(" ", "")));
