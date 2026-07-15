@@ -1,4 +1,6 @@
+import { supabaseAdmin } from "./supabase";
 import type { TxLINEEvent, TxLINEFixture } from "@/types/txline";
+import type { pool_scope } from "./pools";
 
 export const SCORING_RULES = {
   goal: 3,
@@ -26,17 +28,36 @@ interface PoolMemberLookup {
   poolId: string;
 }
 
+export async function getPoolFixtureIds(
+  poolId: string,
+  scope: pool_scope,
+): Promise<string[] | "all"> {
+  if (scope === "all") return "all";
+
+  const { data: fixtures } = await supabaseAdmin
+    .from("pool_fixtures")
+    .select("fixture_id")
+    .eq("pool_id", poolId);
+
+  if (!fixtures || fixtures.length === 0) return "all";
+  return fixtures.map((f) => f.fixture_id);
+}
+
 export function processFixtureEvents(
   events: TxLINEEvent[],
   poolMembers: PoolMemberLookup[],
   processedNonces: Set<string>,
+  allowedFixtureIds: string[] | "all",
   fixtures?: TxLINEFixture[],
 ): ScoringResult[] {
+  if (allowedFixtureIds !== "all") {
+    events = events.filter((e) => allowedFixtureIds.includes(e.fixtureId));
+  }
+
   const results: ScoringResult[] = [];
   const teamToMembers = new Map<string, PoolMemberLookup[]>();
   const fixtureLookup = new Map<string, TxLINEFixture>();
 
-  // FIX: scoring logic previously mapped teamId to a single member, overwriting entries for other pools using the same team. Map teamId to an array of members instead.
   for (const member of poolMembers) {
     const list = teamToMembers.get(member.teamId) || [];
     list.push(member);
@@ -56,12 +77,11 @@ export function processFixtureEvents(
     if (event.type === "own_goal") {
       const fixture = fixtureLookup.get(event.fixtureId);
       if (fixture) {
-        // Own goal benefits the OPPOSITE team in the fixture
         const benefitingTeamId =
           event.teamId === fixture.homeTeamId
             ? fixture.awayTeamId
             : fixture.homeTeamId;
-        
+
         const members = teamToMembers.get(benefitingTeamId);
         if (members) {
           const points = SCORING_RULES[event.type];
@@ -81,7 +101,6 @@ export function processFixtureEvents(
           }
         }
       } else {
-        // FIX: fallback own-goal target team mapping was grabbing the first key that is not event.teamId. Instead, isolate opponent matching by pool.
         const pools = new Map<string, PoolMemberLookup[]>();
         for (const m of poolMembers) {
           const list = pools.get(m.poolId) || [];
@@ -89,7 +108,7 @@ export function processFixtureEvents(
           pools.set(m.poolId, list);
         }
 
-        for (const [poolId, members] of pools.entries()) {
+        for (const [, members] of pools.entries()) {
           const opponents = members.filter((m) => m.teamId !== event.teamId);
           const hasScoringTeam = members.some((m) => m.teamId === event.teamId);
           if (hasScoringTeam) {

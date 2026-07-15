@@ -3,10 +3,9 @@ import { withRateLimit } from "@/lib/ratelimit";
 import { handleRouteError, ApiError } from "@/lib/errors";
 import { requireAuth } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase";
-import { assignTeam, computeLeaderboard } from "@/lib/pools";
+import { computeLeaderboard, getPoolAvailableTeams } from "@/lib/pools";
 import { verifyJoinPoolTx, verifySolTransfer, derivePoolPDA } from "@/lib/solana";
 import { LAMPORTS_PER_SOL } from "@solana/web3.js";
-import { getAllTeams } from "@/lib/txline";
 import { redis, publishPoolUpdate } from "@/lib/redis";
 import { logger } from "@/lib/logger";
 import { sanitizeDisplayName } from "@/lib/utils";
@@ -16,12 +15,12 @@ export const dynamic = "force-dynamic";
 
 const bodySchema = z.object({
   displayName: z.string().min(1).max(40),
+  teamId: z.string(),
   stakeTxSignature: z.string().optional(),
-  tempToken: z.string().optional(),
   passphrase: z.string().optional(),
 });
 
-const DUPLICATE_JOIN_CODE = "23505"; // unique_violation
+const DUPLICATE_JOIN_CODE = "23505";
 
 export async function POST(
   request: Request,
@@ -40,7 +39,7 @@ export async function POST(
     }
 
     const displayName = sanitizeDisplayName(parsed.data.displayName);
-    const { stakeTxSignature, tempToken } = parsed.data;
+    const { stakeTxSignature, teamId } = parsed.data;
 
     const { data: pool, error: poolError } = await supabaseAdmin
       .from("pools")
@@ -60,7 +59,6 @@ export async function POST(
       throw new ApiError(403, "INVALID_PASSPHRASE", "Incorrect pool passphrase");
     }
 
-    // Check pool capacity (best-effort — race window exists but is extremely narrow)
     const { count: memberCount } = await supabaseAdmin
       .from("pool_members")
       .select("*", { count: "exact", head: true })
@@ -70,7 +68,6 @@ export async function POST(
       throw new ApiError(409, "POOL_FULL", "This pool is full");
     }
 
-    // Check duplicate join (unique constraint on pool_id+wallet catches any race)
     const { data: existingMember } = await supabaseAdmin
       .from("pool_members")
       .select("id")
@@ -82,24 +79,29 @@ export async function POST(
       throw new ApiError(409, "ALREADY_JOINED", "You have already joined this pool");
     }
 
-    // Resolve team ID from temp token or assign a new team
-    let assignedTeam: Awaited<ReturnType<typeof assignTeam>> | null = null;
-    let resolvedTeamId: string | null = null;
+    const poolScope = pool.scope || "all";
+    const poolTeams = await getPoolAvailableTeams(pool.id, poolScope);
+    const validTeam = poolTeams.find((t) => t.teamId === teamId);
 
-    if (tempToken) {
-      const raw = await redis.get(`join:temp:${tempToken}`);
-      if (!raw) {
-        throw new ApiError(400, "TEMP_TOKEN_EXPIRED", "Team assignment expired. Please try again.");
-      }
-      const pending = typeof raw === "string" ? JSON.parse(raw) : (raw as any);
-      if (pending.wallet !== wallet || pending.poolId !== pool.id) {
-        throw new ApiError(400, "TEMP_TOKEN_INVALID", "Invalid team assignment token.");
-      }
-      resolvedTeamId = pending.teamId;
-      await redis.del(`join:temp:${tempToken}`);
+    if (!validTeam) {
+      throw new ApiError(400, "INVALID_TEAM", "That team is not available in this pool");
     }
 
-    // Verify on-chain transaction for paid pools
+    const existingTeam = await supabaseAdmin
+      .from("pool_members")
+      .select("id, display_name")
+      .eq("pool_id", pool.id)
+      .eq("team_id", teamId)
+      .maybeSingle();
+
+    if (existingTeam.data) {
+      throw new ApiError(
+        409,
+        "TEAM_TAKEN",
+        `${validTeam.teamName} was just claimed by ${existingTeam.data.display_name}. Please choose another team.`,
+      );
+    }
+
     if (Number(pool.entry_fee_usdc) > 0) {
       if (!stakeTxSignature) {
         throw new ApiError(
@@ -125,7 +127,6 @@ export async function POST(
         );
       }
 
-      // Also verify SOL was actually transferred to the pool PDA
       const [poolPda] = derivePoolPDA(pool.id);
       const solVerified = await verifySolTransfer(
         stakeTxSignature,
@@ -143,28 +144,17 @@ export async function POST(
       }
     }
 
-    if (resolvedTeamId) {
-      const allTeams = await getAllTeams();
-      const found = allTeams.find((t) => t.id === resolvedTeamId);
-      if (found) {
-        assignedTeam = found;
-      }
-    }
-    if (!assignedTeam) {
-      assignedTeam = await assignTeam(pool.id);
-    }
-
-    // Insert the member — unique constraint on (pool_id, wallet) catches race doubles
     const { data: member, error: insertError } = await supabaseAdmin
       .from("pool_members")
       .insert({
         pool_id: pool.id,
         wallet,
         display_name: displayName,
-        team_id: assignedTeam.id,
-        team_name: assignedTeam.name,
-        team_flag_url: assignedTeam.flagUrl,
-        team_group: assignedTeam.group,
+        team_id: validTeam.teamId,
+        team_name: validTeam.teamName,
+        team_flag_url: validTeam.flagUrl,
+        team_group: validTeam.group,
+        team_chosen_at: new Date().toISOString(),
         stake_tx: stakeTxSignature ?? null,
       })
       .select()
@@ -178,7 +168,6 @@ export async function POST(
       throw new ApiError(500, "JOIN_FAILED", "Failed to join pool");
     }
 
-    // Update pool status outside the critical path - no need to rollback if these fail
     if (pool.status === "waiting") {
       await supabaseAdmin
         .from("pools")
@@ -204,17 +193,19 @@ export async function POST(
       data: {
         wallet,
         displayName,
-        teamName: assignedTeam.name,
-        teamFlagUrl: assignedTeam.flagUrl,
+        teamName: validTeam.teamName,
+        teamFlagUrl: validTeam.flagUrl,
+        teamId,
       },
     });
 
     const leaderboard = await computeLeaderboard(pool.id);
 
-    logger.info("Member joined pool", {
+    logger.info("Member joined pool with chosen team", {
       wallet,
       poolId: pool.id,
-      teamId: assignedTeam.id,
+      teamId,
+      teamName: validTeam.teamName,
     });
 
     return Response.json({
@@ -228,7 +219,6 @@ export async function POST(
         score: member.score,
         joinedAt: member.joined_at,
       },
-      assignedTeam,
       leaderboard,
     });
   } catch (e) {

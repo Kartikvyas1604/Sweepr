@@ -24,6 +24,8 @@ export const TxLINEFixtureSchema = z.object({
   minute: z.number().nullable(),
   stage: z.string(),
   group: z.string().nullable(),
+  homeFlagUrl: z.string().optional(),
+  awayFlagUrl: z.string().optional(),
 });
 
 export type TxLINEFixture = z.infer<typeof TxLINEFixtureSchema>;
@@ -58,3 +60,14 @@ export const TxLINEStandingsSchema = z.object({
 });
 
 export type TxLINEStandings = z.infer<typeof TxLINEStandingsSchema>;
+
+export interface FixtureOption {
+  id: string;
+  label: string;
+  homeTeam: { id: string; name: string; flagUrl?: string };
+  awayTeam: { id: string; name: string; flagUrl?: string };
+  kickoff: string;
+  stage: string;
+  group: string | null;
+  status: "scheduled" | "live" | "finished";
+}

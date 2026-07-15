@@ -6,6 +6,7 @@ pub struct PoolState {
     pub pool_id: [u8; 16],
     pub authority: Pubkey,
     pub status: PoolStatus,
+    pub scope: PoolScope,
     pub entry_fee_usdc: u64,
     pub total_staked: u64,
     pub member_count: u8,
@@ -21,6 +22,13 @@ pub enum PoolStatus {
     Waiting,
     Active,
     Settled,
+}
+
+#[derive(AnchorSerialize, AnchorDeserialize, InitSpace, Clone, PartialEq, Eq)]
+pub enum PoolScope {
+    All,
+    Single,
+    Custom,
 }
 
 #[account]

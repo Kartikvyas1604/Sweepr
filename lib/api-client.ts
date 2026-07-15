@@ -80,27 +80,33 @@ export const api = {
       const params = wallet ? `?wallet=${encodeURIComponent(wallet)}` : "";
       return request<{ pools: any[] }>(`/api/pools${params}`);
     },
-    create: (name: string, entryFeeUsdc: number, maxMembers?: number, isPrivate?: boolean, passphrase?: string) =>
-      request<{ pool: any; joinUrl: string }>("/api/pools", {
+    create: (
+      name: string,
+      entryFeeUsdc: number,
+      scope: "all" | "single" | "custom" = "all",
+      fixtureIds?: string[],
+      isPrivate?: boolean,
+      passphrase?: string,
+    ) =>
+      request<{ pool: any; joinUrl: string; availableTeams: any[]; fixtureCount: number }>("/api/pools", {
         method: "POST",
-        body: JSON.stringify({ name, entryFeeUsdc, maxMembers, isPrivate, passphrase }),
+        body: JSON.stringify({ name, entryFeeUsdc, scope, fixtureIds, isPrivate, passphrase }),
       }),
     get: (joinCode: string) =>
       request<{ pool: any; leaderboard: any[]; memberCount: number; spotsRemaining: number; joinUrl: string }>(
         `/api/pools/${joinCode}`,
       ),
-    assignTeam: (joinCode: string) =>
-      request<{ tempToken: string; team: any; teamIdBytes: number[]; entryFeeUsdc: number }>(
-        `/api/pools/${joinCode}/assign-team`,
-        { method: "POST" },
-      ),
-    join: (joinCode: string, displayName: string, stakeTxSignature?: string, tempToken?: string, passphrase?: string) =>
-      request<{ member: any; assignedTeam: any; leaderboard: any[] }>(
+    join: (joinCode: string, displayName: string, teamId: string, stakeTxSignature?: string, passphrase?: string) =>
+      request<{ member: any; leaderboard: any[] }>(
         `/api/pools/${joinCode}/join`,
         {
           method: "POST",
-          body: JSON.stringify({ displayName, stakeTxSignature, tempToken, passphrase }),
+          body: JSON.stringify({ displayName, teamId, stakeTxSignature, passphrase }),
         },
+      ),
+    teams: (joinCode: string) =>
+      request<{ teams: any[]; scope: string; totalTeams: number; takenCount: number; availableCount: number }>(
+        `/api/pools/${joinCode}/teams`,
       ),
     leaderboard: (joinCode: string) =>
       request<{ leaderboard: any[]; recentEvents: any[]; lastUpdated: string; poolStatus: string }>(
@@ -108,14 +114,9 @@ export const api = {
       ),
   },
 
-  teams: {
-    getAll: (poolId?: string) =>
-      request<{ teams: any[]; assignedTeamIds?: string[] }>(
-        `/api/teams${poolId ? `?poolId=${poolId}` : ""}`,
-      ),
-  },
-
   fixtures: {
+    options: () =>
+      request<{ grouped: any[]; all: any[]; totalCount: number }>("/api/fixtures/options"),
     get: (liveOnly = false) =>
       request<{ fixtures: any[] }>(`/api/fixtures${liveOnly ? "?live=true" : ""}`),
   },

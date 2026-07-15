@@ -1,7 +1,7 @@
 import { handleRouteError, ApiError } from "@/lib/errors";
 import { supabaseAdmin } from "@/lib/supabase";
 import { getLiveFixtures, getFixtureEvents } from "@/lib/txline";
-import { processFixtureEvents } from "@/lib/scoring";
+import { processFixtureEvents, getPoolFixtureIds } from "@/lib/scoring";
 import { publishPoolUpdate } from "@/lib/redis";
 import { callUpdateScore } from "@/lib/solana";
 import { computeLeaderboard } from "@/lib/pools";
@@ -17,7 +17,7 @@ export async function POST(request: Request) {
 
     const { data: activePools } = await supabaseAdmin
       .from("pools")
-      .select("id, created_by")
+      .select("id, created_by, scope")
       .eq("status", "active");
 
     if (!activePools || activePools.length === 0) {
@@ -37,7 +37,13 @@ export async function POST(request: Request) {
     let totalNewGoals = 0;
 
     for (const pool of activePools) {
-      logger.info("Processing pool score sync", { poolId: pool.id });
+      logger.info("Processing pool score sync", { poolId: pool.id, scope: pool.scope });
+
+      const allowedFixtureIds = await getPoolFixtureIds(
+        pool.id,
+        pool.scope || "all",
+      );
+
       const { data: members } = await supabaseAdmin
         .from("pool_members")
         .select("id, wallet, team_id, display_name, team_name, team_flag_url")
@@ -67,10 +73,20 @@ export async function POST(request: Request) {
       const processedNonces = new Set(nonceRows?.map((n: any) => n.nonce) ?? []);
 
       for (const fixture of liveFixtures) {
+        if (allowedFixtureIds !== "all" && !allowedFixtureIds.includes(fixture.id)) {
+          continue;
+        }
+
         const events = await getFixtureEvents(fixture.id);
         if (events.length === 0) continue;
 
-        const results = processFixtureEvents(events, memberLookups, processedNonces, liveFixtures);
+        const results = processFixtureEvents(
+          events,
+          memberLookups,
+          processedNonces,
+          allowedFixtureIds,
+          liveFixtures,
+        );
 
         for (const result of results) {
           const { error: insertError } = await supabaseAdmin
@@ -136,7 +152,6 @@ export async function POST(request: Request) {
             },
           });
 
-          // Attempt on-chain score update. If it fails, enqueue a retry.
           try {
             await callUpdateScore(pool.id, result.wallet, result.points, result.eventId);
           } catch (e) {
@@ -153,7 +168,7 @@ export async function POST(request: Request) {
                 points: result.points,
                 eventNonce: result.eventId,
               },
-              next_retry_at: new Date(Date.now() + 30000).toISOString(), // 30s delay
+              next_retry_at: new Date(Date.now() + 30000).toISOString(),
             }).maybeSingle();
           }
 

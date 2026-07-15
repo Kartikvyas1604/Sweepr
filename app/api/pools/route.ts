@@ -3,12 +3,13 @@ import { withRateLimit } from "@/lib/ratelimit";
 import { handleRouteError, ApiError } from "@/lib/errors";
 import { requireAuth } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase";
-import { generateJoinCode } from "@/lib/pools";
+import { generateJoinCode, getPoolAvailableTeams } from "@/lib/pools";
 import { deriveEscrowPDA, callInitializePool } from "@/lib/solana";
 import { publishPoolUpdate } from "@/lib/redis";
 import { env } from "@/lib/env";
 import { logger } from "@/lib/logger";
 import { sanitizePoolName } from "@/lib/utils";
+import { getFixtureById, getAllTeams } from "@/lib/txline";
 
 export const dynamic = "force-dynamic";
 
@@ -86,6 +87,7 @@ export async function GET(request: Request) {
           winnerWallet: pool.winner_wallet,
           settlementTx: pool.settlement_tx,
           isPrivate: pool.is_private,
+          scope: pool.scope || "all",
           ...(myMember ? {
             myTeam: {
               teamId: myMember.team_id,
@@ -125,11 +127,65 @@ export async function POST(request: Request) {
       return handleRouteError(parsed.error);
     }
 
-    const { name: rawName, entryFeeUsdc, maxMembers, isPrivate, passphrase } = parsed.data;
+    const { name: rawName, entryFeeUsdc, isPrivate, passphrase, scope, fixtureIds } = parsed.data;
     const name = sanitizePoolName(rawName);
 
     if (entryFeeUsdc > 0 && entryFeeUsdc < 0.0001) {
       throw new ApiError(400, "INVALID_FEE", "Entry fee must be 0 or at least 0.0001 SOL");
+    }
+
+    let finalMaxMembers = 32;
+    let poolFixturesToInsert: { fixture_id: string; home_team_id: string; home_team_name: string; home_flag_url: string | null; away_team_id: string; away_team_name: string; away_flag_url: string | null; kickoff: string; stage: string; group: string | null }[] = [];
+
+    if (scope === "single") {
+      if (!fixtureIds || fixtureIds.length !== 1) {
+        throw new ApiError(400, "FIXTURES_REQUIRED", "Single-scope pool requires exactly one fixture");
+      }
+      const fixture = await getFixtureById(fixtureIds[0]);
+      finalMaxMembers = 2;
+      const homeTeam = (await getAllTeams()).find((t) => t.id === fixture.homeTeamId);
+      const awayTeam = (await getAllTeams()).find((t) => t.id === fixture.awayTeamId);
+      poolFixturesToInsert = [{
+        fixture_id: fixture.id,
+        home_team_id: fixture.homeTeamId,
+        home_team_name: homeTeam?.name ?? fixture.homeTeamName,
+        home_flag_url: homeTeam?.flagUrl ?? fixture.homeFlagUrl ?? null,
+        away_team_id: fixture.awayTeamId,
+        away_team_name: awayTeam?.name ?? fixture.awayTeamName,
+        away_flag_url: awayTeam?.flagUrl ?? fixture.awayFlagUrl ?? null,
+        kickoff: fixture.kickoff,
+        stage: fixture.stage,
+        group: fixture.group,
+      }];
+    } else if (scope === "custom") {
+      if (!fixtureIds || fixtureIds.length < 1) {
+        throw new ApiError(400, "FIXTURES_REQUIRED", "Custom-scope pool requires at least one fixture");
+      }
+      if (fixtureIds.length > 32) {
+        throw new ApiError(400, "TOO_MANY_FIXTURES", "Custom-scope pool supports up to 32 fixtures");
+      }
+      const allTeams = await getAllTeams();
+      const uniqueTeamIds = new Set<string>();
+      for (const fid of fixtureIds) {
+        const fixture = await getFixtureById(fid);
+        uniqueTeamIds.add(fixture.homeTeamId);
+        uniqueTeamIds.add(fixture.awayTeamId);
+        const homeTeam = allTeams.find((t) => t.id === fixture.homeTeamId);
+        const awayTeam = allTeams.find((t) => t.id === fixture.awayTeamId);
+        poolFixturesToInsert.push({
+          fixture_id: fixture.id,
+          home_team_id: fixture.homeTeamId,
+          home_team_name: homeTeam?.name ?? fixture.homeTeamName,
+          home_flag_url: homeTeam?.flagUrl ?? fixture.homeFlagUrl ?? null,
+          away_team_id: fixture.awayTeamId,
+          away_team_name: awayTeam?.name ?? fixture.awayTeamName,
+          away_flag_url: awayTeam?.flagUrl ?? fixture.awayFlagUrl ?? null,
+          kickoff: fixture.kickoff,
+          stage: fixture.stage,
+          group: fixture.group,
+        });
+      }
+      finalMaxMembers = Math.min(uniqueTeamIds.size, 32);
     }
 
     const joinCode = await generateJoinCode();
@@ -149,11 +205,12 @@ export async function POST(request: Request) {
         created_by: wallet,
         join_code: joinCode,
         entry_fee_usdc: entryFeeUsdc,
-        max_members: maxMembers,
+        max_members: finalMaxMembers,
         escrow_pda: escrowPda,
         status: "waiting",
         is_private: isPrivate,
         passphrase: isPrivate ? (passphrase ?? null) : null,
+        scope,
       })
       .select()
       .single();
@@ -163,9 +220,24 @@ export async function POST(request: Request) {
       throw new ApiError(500, "POOL_CREATE_FAILED", "Failed to create pool");
     }
 
-    // Initialize on-chain pool (free pool — 0 fee on-chain, fee tracked in DB only)
-    // Required even for "free" pools so the PoolState PDA exists for joinPool.
-    await callInitializePool(poolId, entryFeeUsdc, maxMembers).catch((e) => {
+    if (poolFixturesToInsert.length > 0) {
+      const { error: fixturesError } = await supabaseAdmin
+        .from("pool_fixtures")
+        .insert(
+          poolFixturesToInsert.map((f) => ({
+            pool_id: poolId,
+            ...f,
+          })),
+        );
+      if (fixturesError) {
+        logger.error("Failed to insert pool_fixtures", { error: fixturesError, poolId });
+        throw new ApiError(500, "FIXTURES_INSERT_FAILED", "Failed to save pool fixtures");
+      }
+    }
+
+    const availableTeams = await getPoolAvailableTeams(poolId, scope);
+
+    await callInitializePool(poolId, entryFeeUsdc, finalMaxMembers, scope).catch((e) => {
       logger.error("Pool init on-chain failed (non-fatal)", { poolId, error: String(e) });
     });
 
@@ -173,10 +245,10 @@ export async function POST(request: Request) {
       type: "heartbeat",
       poolId: pool.id,
       timestamp: Date.now(),
-      data: { action: "created", wallet },
+      data: { action: "created", wallet, scope, fixtureCount: poolFixturesToInsert.length },
     });
 
-    logger.info("Pool created", { poolId: pool.id, wallet, joinCode });
+    logger.info("Pool created", { poolId: pool.id, wallet, joinCode, scope, fixtureCount: poolFixturesToInsert.length });
 
     return Response.json({
       pool: {
@@ -186,12 +258,19 @@ export async function POST(request: Request) {
         status: pool.status,
         entryFeeUsdc: Number(pool.entry_fee_usdc),
         maxMembers: pool.max_members,
+        scope,
         escrowPda: pool.escrow_pda,
         createdAt: pool.created_at,
         isPrivate: pool.is_private,
         passphrase: pool.passphrase,
       },
       joinUrl: `${env.NEXT_PUBLIC_APP_URL}/join/${joinCode}`,
+      availableTeams: availableTeams.map((t) => ({
+        teamId: t.teamId,
+        teamName: t.teamName,
+        flagUrl: t.flagUrl,
+      })),
+      fixtureCount: poolFixturesToInsert.length,
     });
   } catch (e) {
     return handleRouteError(e);

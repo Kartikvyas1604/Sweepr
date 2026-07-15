@@ -1,11 +1,30 @@
 import { redis } from "./redis";
 import { supabaseAdmin } from "./supabase";
-import { getAllTeams } from "./txline";
+import { getAllTeams, getTeamById, getFixtureById } from "./txline";
 import { ApiError } from "./errors";
+import { logger } from "./logger";
 import type { LeaderboardEntry } from "@/types/api";
+import type { TxLINETeam } from "@/types/txline";
 
 const JOIN_CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 const JOIN_CODE_LENGTH = 6;
+
+export type pool_scope = "all" | "single" | "custom";
+
+export interface PoolTeam {
+  teamId: string;
+  teamName: string;
+  flagUrl: string;
+  group: string | null;
+  fixtureId: string | null;
+  opponentName: string | null;
+  kickoff: string | null;
+}
+
+export interface TeamWithStatus extends PoolTeam {
+  isTaken: boolean;
+  takenBy: string | null;
+}
 
 function secureRandomInt(max: number): number {
   const array = new Uint32Array(1);
@@ -33,28 +52,100 @@ export async function generateJoinCode(): Promise<string> {
   return code;
 }
 
-export async function assignTeam(poolId: string) {
-  const teams = await getAllTeams();
+export async function getPoolAvailableTeams(
+  poolId: string,
+  scope: pool_scope,
+): Promise<PoolTeam[]> {
+  if (scope === "all") {
+    const teams = await getAllTeams();
+    return teams.map((t) => ({
+      teamId: t.id,
+      teamName: t.name,
+      flagUrl: t.flagUrl,
+      group: t.group,
+      fixtureId: null,
+      opponentName: null,
+      kickoff: null,
+    }));
+  }
 
-  const { data: existing } = await supabaseAdmin
-    .from("pool_members")
-    .select("team_id")
+  const { data: poolFixtures, error } = await supabaseAdmin
+    .from("pool_fixtures")
+    .select("*")
     .eq("pool_id", poolId);
 
-  const assignedIds = new Set(existing?.map((m) => m.team_id) ?? []);
-  const available = teams.filter((t) => !assignedIds.has(t.id));
-
-  if (available.length === 0) {
-    throw new ApiError(409, "NO_TEAMS_LEFT", "All 32 teams have been assigned to this pool");
+  if (error) {
+    logger.error("Failed to fetch pool_fixtures", { error, poolId });
+    throw new ApiError(500, "FIXTURES_FETCH_FAILED", "Failed to fetch pool fixtures");
   }
 
-  const shuffled = [...available];
-  for (let i = shuffled.length - 1; i > 0; i--) {
-    const j = secureRandomInt(i + 1);
-    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  if (!poolFixtures || poolFixtures.length === 0) {
+    const teams = await getAllTeams();
+    return teams.map((t) => ({
+      teamId: t.id,
+      teamName: t.name,
+      flagUrl: t.flagUrl,
+      group: t.group,
+      fixtureId: null,
+      opponentName: null,
+      kickoff: null,
+    }));
   }
 
-  return shuffled[0];
+  const seen = new Set<string>();
+  const teams: PoolTeam[] = [];
+
+  for (const pf of poolFixtures) {
+    for (const side of [
+      { teamId: pf.home_team_id, teamName: pf.home_team_name, flagUrl: pf.home_flag_url, opponentName: pf.away_team_name },
+      { teamId: pf.away_team_id, teamName: pf.away_team_name, flagUrl: pf.away_flag_url, opponentName: pf.home_team_name },
+    ]) {
+      if (seen.has(side.teamId)) continue;
+      seen.add(side.teamId);
+
+      const team = await getTeamById(side.teamId);
+      teams.push({
+        teamId: side.teamId,
+        teamName: side.teamName,
+        flagUrl: side.flagUrl || team?.flagUrl || "",
+        group: team?.group || null,
+        fixtureId: pf.fixture_id,
+        opponentName: side.opponentName,
+        kickoff: pf.kickoff,
+      });
+    }
+  }
+
+  return teams;
+}
+
+export async function getPoolTakenTeams(
+  poolId: string,
+): Promise<{ teamId: string; takenBy: string }[]> {
+  const { data: members } = await supabaseAdmin
+    .from("pool_members")
+    .select("team_id, display_name")
+    .eq("pool_id", poolId);
+
+  return (members ?? []).map((m) => ({
+    teamId: m.team_id,
+    takenBy: m.display_name,
+  }));
+}
+
+export async function getPoolTeamsWithStatus(
+  poolId: string,
+  scope: pool_scope,
+): Promise<TeamWithStatus[]> {
+  const available = await getPoolAvailableTeams(poolId, scope);
+  const taken = await getPoolTakenTeams(poolId);
+  const takenMap = new Map(taken.map((t) => [t.teamId, t.takenBy]));
+
+  return available.map((team) => ({
+    ...team,
+    isTaken: takenMap.has(team.teamId),
+    takenBy: takenMap.get(team.teamId) ?? null,
+  }));
 }
 
 export async function computeLeaderboard(

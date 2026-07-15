@@ -1,4 +1,5 @@
 import type { TxLINETeam } from "./txline";
+import type { pool_scope } from "./db";
 
 export interface NonceResponse {
   nonce: string;
@@ -15,6 +16,8 @@ export interface CreatePoolRequest {
   name: string;
   entryFeeUsdc: number;
   maxMembers?: number;
+  scope: pool_scope;
+  fixtureIds?: string[];
 }
 
 export interface CreatePoolResponse {
@@ -25,15 +28,20 @@ export interface CreatePoolResponse {
     status: string;
     entryFeeUsdc: number;
     maxMembers: number;
+    scope: pool_scope;
     escrowPda: string | null;
     createdAt: string;
   };
   joinUrl: string;
+  availableTeams: { teamId: string; teamName: string; flagUrl: string }[];
+  fixtureCount: number;
 }
 
 export interface JoinPoolRequest {
   displayName: string;
+  teamId: string;
   stakeTxSignature?: string;
+  passphrase?: string;
 }
 
 export interface JoinPoolResponse {
@@ -47,7 +55,6 @@ export interface JoinPoolResponse {
     score: number;
     joinedAt: string;
   };
-  assignedTeam: TxLINETeam;
   leaderboard: LeaderboardEntry[];
 }
 
@@ -100,6 +107,27 @@ export interface PoolUpdateEvent {
 export interface TeamsResponse {
   teams: TxLINETeam[];
   assignedTeamIds?: string[];
+}
+
+export interface PoolTeamsResponse {
+  teams: {
+    teamId: string;
+    teamName: string;
+    flagUrl: string;
+    group: string | null;
+    isTaken: boolean;
+    takenBy: string | null;
+    fixture: {
+      fixtureId: string;
+      opponentName: string;
+      kickoff: string;
+      stage: string;
+    } | null;
+  }[];
+  scope: pool_scope;
+  totalTeams: number;
+  takenCount: number;
+  availableCount: number;
 }
 
 export interface FixturesResponse {

@@ -182,6 +182,7 @@ export async function callInitializePool(
   poolId: string,
   entryFeeUsdc: number,
   maxMembers: number,
+  scope: "all" | "single" | "custom" = "all",
 ): Promise<string> {
   try {
     const prog = getProgram();
@@ -202,6 +203,8 @@ export async function callInitializePool(
       return "already_initialized";
     }
 
+    const scopeEnum = scope === "all" ? { all: {} } : scope === "single" ? { single: {} } : { custom: {} };
+
     // Initialize as free pool on-chain (entryFeeUsdc=0).
     // Entry fee is tracked in the database, not on-chain.
     const sig = await (prog.methods as any)
@@ -209,6 +212,7 @@ export async function callInitializePool(
         poolIdBytes,
         new BN(0),
         maxMembers,
+        scopeEnum,
       )
       .accounts({
         authority: oracleKeypair.publicKey,

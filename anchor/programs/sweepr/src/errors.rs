@@ -40,4 +40,10 @@ pub enum SweeprError {
 
     #[msg("Arithmetic operation overflowed")]
     ArithmeticOverflow,
+
+    #[msg("Invalid team ID for this pool")]
+    InvalidTeamId,
+
+    #[msg("Team has already been taken in this pool")]
+    TeamAlreadyTaken,
 }

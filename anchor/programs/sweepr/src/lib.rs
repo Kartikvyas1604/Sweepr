@@ -24,6 +24,7 @@ pub mod sweepr {
         pool_id: [u8; 16],
         entry_fee_usdc: u64,
         max_members: u8,
+        scope: PoolScope,
     ) -> Result<()> {
         require!(
             max_members >= 2 && max_members <= MAX_MEMBERS,
@@ -41,6 +42,7 @@ pub mod sweepr {
         pool.pool_id = pool_id;
         pool.authority = ctx.accounts.authority.key();
         pool.status = PoolStatus::Waiting;
+        pool.scope = scope;
         pool.entry_fee_usdc = entry_fee_usdc;
         pool.total_staked = 0;
         pool.member_count = 0;
@@ -307,7 +309,7 @@ pub mod sweepr {
 }
 
 #[derive(Accounts)]
-#[instruction(pool_id: [u8; 16], entry_fee_usdc: u64, max_members: u8)]
+#[instruction(pool_id: [u8; 16], entry_fee_usdc: u64, max_members: u8, scope: PoolScope)]
 pub struct InitializePool<'info> {
     #[account(mut)]
     pub authority: Signer<'info>,

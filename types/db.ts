@@ -1,3 +1,5 @@
+export type pool_scope = "all" | "single" | "custom";
+
 export interface Database {
   public: {
     Tables: {
@@ -11,6 +13,12 @@ export interface Database {
         Row: PoolMemberRow;
         Insert: PoolMemberInsert;
         Update: PoolMemberUpdate;
+        Relationships: [];
+      };
+      pool_fixtures: {
+        Row: PoolFixtureRow;
+        Insert: PoolFixtureInsert;
+        Update: never;
         Relationships: [];
       };
       score_events: {
@@ -39,6 +47,7 @@ export interface Database {
     Enums: {
       pool_status: "waiting" | "active" | "settled";
       event_type: "goal" | "own_goal" | "penalty";
+      pool_scope: pool_scope;
     };
     CompositeTypes: Record<string, never>;
   };
@@ -56,6 +65,7 @@ export interface PoolRow {
   winner_wallet: string | null;
   settlement_tx: string | null;
   max_members: number;
+  scope: pool_scope;
   created_at: string;
   settled_at: string | null;
 }
@@ -72,6 +82,7 @@ export interface PoolInsert {
   winner_wallet?: string | null;
   settlement_tx?: string | null;
   max_members?: number;
+  scope?: pool_scope;
   created_at?: string;
   settled_at?: string | null;
 }
@@ -84,6 +95,8 @@ export interface PoolUpdate {
   winner_wallet?: string | null;
   settlement_tx?: string | null;
   settled_at?: string | null;
+  scope?: pool_scope;
+  max_members?: number;
 }
 
 export interface PoolMemberRow {
@@ -99,6 +112,7 @@ export interface PoolMemberRow {
   rank: number | null;
   joined_at: string;
   stake_tx: string | null;
+  team_chosen_at: string | null;
 }
 
 export interface PoolMemberInsert {
@@ -114,12 +128,43 @@ export interface PoolMemberInsert {
   rank?: number | null;
   joined_at?: string;
   stake_tx?: string | null;
+  team_chosen_at?: string | null;
 }
 
 export interface PoolMemberUpdate {
   score?: number;
   rank?: number | null;
   stake_tx?: string | null;
+}
+
+export interface PoolFixtureRow {
+  id: string;
+  pool_id: string;
+  fixture_id: string;
+  home_team_id: string;
+  away_team_id: string;
+  home_team_name: string;
+  away_team_name: string;
+  home_flag_url: string | null;
+  away_flag_url: string | null;
+  kickoff: string | null;
+  stage: string | null;
+  group_name: string | null;
+}
+
+export interface PoolFixtureInsert {
+  id?: string;
+  pool_id: string;
+  fixture_id: string;
+  home_team_id: string;
+  away_team_id: string;
+  home_team_name: string;
+  away_team_name: string;
+  home_flag_url?: string | null;
+  away_flag_url?: string | null;
+  kickoff?: string | null;
+  stage?: string | null;
+  group_name?: string | null;
 }
 
 export interface ScoreEventRow {
