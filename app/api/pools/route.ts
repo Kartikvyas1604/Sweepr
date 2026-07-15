@@ -110,6 +110,8 @@ const bodySchema = z.object({
   maxMembers: z.number().int().min(2).max(32).default(32),
   isPrivate: z.boolean().default(false),
   passphrase: z.string().min(1).max(100).optional().nullable(),
+  scope: z.enum(["all", "single", "custom"]).default("all"),
+  fixtureIds: z.array(z.string()).optional(),
 });
 
 export async function POST(request: Request) {

@@ -258,3 +258,55 @@ export function computePointsForEvent(event: TxLINEEvent): number {
     default: return 0;
   }
 }
+
+// --- Fixture methods ---
+export async function getFixtureById(fixtureId: string): Promise<TxLINEFixture> {
+  const cacheKey = `txline:fixture:${fixtureId}`;
+
+  const cached = await cacheGet(cacheKey, z.any());
+  if (cached) return cached as TxLINEFixture;
+
+  const allFixtures = await getFixtures();
+  const fixture = allFixtures.find((f) => f.id === fixtureId);
+
+  if (!fixture) {
+    throw new TxLINEError(`Fixture not found: ${fixtureId}`);
+  }
+
+  if (fixture.status === "finished") {
+    throw new TxLINEError(`Fixture already finished: ${fixtureId}`);
+  }
+
+  await cacheSet(cacheKey, fixture, 300);
+  return fixture;
+}
+
+export async function getFixturesByStage(stage: string): Promise<TxLINEFixture[]> {
+  const allFixtures = await getFixtures();
+  return allFixtures.filter((f) => f.stage === stage);
+}
+
+export async function getFixturesByGroup(group: string): Promise<TxLINEFixture[]> {
+  const allFixtures = await getFixtures();
+  return allFixtures.filter((f) => f.group === group);
+}
+
+export async function getTeamsForFixtures(fixtureIds: string[]): Promise<TxLINETeam[]> {
+  const fixtures = await Promise.all(
+    fixtureIds.map(async (id) => await getFixtureById(id))
+  );
+
+  const uniqueTeamIds = new Set<string>();
+  for (const f of fixtures) {
+    uniqueTeamIds.add(f.homeTeamId);
+    uniqueTeamIds.add(f.awayTeamId);
+  }
+
+  const teams = await Promise.all(
+    Array.from(uniqueTeamIds).map(async (teamId) => {
+      return await getTeamById(teamId);
+    })
+  );
+
+  return teams.filter((team): team is TxLINETeam => team !== null);
+}

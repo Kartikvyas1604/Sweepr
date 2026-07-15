@@ -1,26 +1,36 @@
+import { z } from "zod";
+import { withRateLimit } from "@/lib/ratelimit";
 import { handleRouteError, ApiError } from "@/lib/errors";
 import { supabaseAdmin } from "@/lib/supabase";
-import { callInitializePool, derivePoolPDA, getConnection } from "@/lib/solana";
-import { env } from "@/lib/env";
+import { txline } from "@/lib/txline";
+import { getAllTeams } from "@/lib/txline";
 import { logger } from "@/lib/logger";
-import { verifySecret } from "@/lib/security";
 
 export const dynamic = "force-dynamic";
 
-export async function POST(request: Request) {
+const bodySchema = z.object({
+  poolId: z.string(),
+  scope: z.enum(["all", "single", "custom"]),
+  fixtureIds: z.array(z.string()).optional(),
+});
+
+export async function POST(
+  request: Request,
+) {
   try {
-    if (!verifySecret(request.headers.get("authorization")?.replace("Bearer ", "") ?? "", env.INNGEST_SIGNING_KEY)) {
-      throw new ApiError(401, "UNAUTHORIZED", "Invalid admin key");
+    await withRateLimit(request, 60, "1m");
+
+    const body = await request.json();
+    const parsed = bodySchema.safeParse(body);
+    if (!parsed.success) {
+      return handleRouteError(parsed.error);
     }
 
-    const { poolId } = await request.json();
-    if (!poolId) {
-      throw new ApiError(400, "POOL_ID_REQUIRED", "poolId is required");
-    }
+    const { poolId, scope, fixtureIds } = parsed.data;
 
     const { data: pool, error: poolError } = await supabaseAdmin
       .from("pools")
-      .select("*")
+      .select("*, scope")
       .eq("id", poolId)
       .single();
 
@@ -28,30 +38,86 @@ export async function POST(request: Request) {
       throw new ApiError(404, "POOL_NOT_FOUND", "Pool not found");
     }
 
-    const [poolPda] = derivePoolPDA(poolId);
-    const accountInfo = await getConnection().getAccountInfo(poolPda);
-
-    if (accountInfo) {
-      return Response.json({
-        status: "already_initialized",
-        pda: poolPda.toString(),
-        msg: "Pool PDA already exists on-chain",
-      });
+    if (pool.status === "settled" || pool.status === "onchain_failed") {
+      throw new ApiError(409, "POOL_SETTLED", "This pool has already been settled or failed");
     }
 
-    const entryFeeUsdc = Number(pool.entry_fee_usdc);
-    const txSig = await callInitializePool(
-      poolId,
-      entryFeeUsdc,
-      pool.max_members,
-    );
+    await supabaseAdmin
+      .from("pool_fixtures")
+      .delete()
+      .eq("pool_id", poolId);
 
-    logger.info("Pool repaired on-chain", { poolId, txSig });
+    if (fixtureIds && fixtureIds.length > 0) {
+      const fixtures = await Promise.all(
+        fixtureIds.map(async (fixtureId) => {
+          const fixture = await txline.getFixtureById(fixtureId);
+          return {
+            pool_id: poolId,
+            fixture_id: fixture.id,
+            home_team_id: fixture.homeTeamId,
+            away_team_id: fixture.awayTeamId,
+            home_team_name: fixture.homeTeamName,
+            away_team_name: fixture.awayTeamName,
+            home_flag_url: fixture.homeFlagUrl || null,
+            away_flag_url: fixture.awayFlagUrl || null,
+            kickoff: fixture.kickoff,
+            stage: fixture.stage,
+            group_name: fixture.group || null,
+          };
+        })
+      );
+
+      const { error: insertError } = await supabaseAdmin
+        .from("pool_fixtures")
+        .insert(fixtures);
+
+      if (insertError) {
+        logger.error("Failed to insert pool fixtures", { error: insertError, poolId });
+        throw new ApiError(500, "FIXTURES_INSERT_FAILED", "Failed to insert pool fixtures");
+      }
+    }
+
+    const { data: updatedPool } = await supabaseAdmin
+      .from("pools")
+      .update({ scope })
+      .eq("id", poolId)
+      .select()
+      .single();
+
+    const fixtureCount = fixtureIds?.length || 0;
+    const uniqueTeams = new Set<string>();
+    
+    if (fixtureIds && fixtureIds.length > 0) {
+      const { data: poolFixtures } = await supabaseAdmin
+        .from("pool_fixtures")
+        .select("home_team_id, away_team_id")
+        .eq("pool_id", poolId);
+
+      for (const fixture of poolFixtures || []) {
+        uniqueTeams.add(fixture.home_team_id);
+        uniqueTeams.add(fixture.away_team_id);
+      }
+    } else if (scope === "all") {
+      const allTeams = await getAllTeams();
+      for (const team of allTeams) {
+        uniqueTeams.add(team.id);
+      }
+    }
+
+    const maxMembers = scope === "all" ? 32 : uniqueTeams.size;
+
+    await supabaseAdmin
+      .from("pools")
+      .update({ max_members: maxMembers })
+      .eq("id", poolId)
+      .single();
 
     return Response.json({
-      status: "initialized",
-      txSig,
-      pda: poolPda.toString(),
+      success: true,
+      pool: updatedPool,
+      fixtureCount,
+      uniqueTeams: uniqueTeams.size,
+      maxMembers,
     });
   } catch (e) {
     return handleRouteError(e);
